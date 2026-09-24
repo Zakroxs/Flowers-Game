@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Flowers 🌸 · Juego de Preguntas para Parejas</title>
+
+<!--
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  FLOWERS 🌸 — guía rápida del archivo                            ║
+  ╠══════════════════════════════════════════════════════════════════╣
+  ║  Tres partes, en este orden:                                     ║
+  ║    1) <style>   → el diseño (colores, tamaños, animaciones)      ║
+  ║    2) <body>    → la estructura (botones, tarjeta, ventanas)     ║
+  ║    3) <script>  → la lógica del juego                            ║
+  ║                                                                  ║
+  ║  ¿QUIERES AGREGAR PREGUNTAS O MOMENTOS ESPECIALES?               ║
+  ║  → Dentro del <script>, busca con Ctrl+F: "BANCO DE PREGUNTAS"   ║
+  ║    (o "MOMENTOS ESPECIALES"). Hay instrucciones paso a paso.     ║
+  ║                                                                  ║
+  ║  REGLA DEL JUEGO                                                 ║
+  ║  Quien gira la ruleta LEE la pregunta y ANOTA lo que responde    ║
+  ║  la otra persona. Quien no gira, responde. Después de cada       ║
+  ║  pregunta, los papeles se intercambian.                          ║
+  ║                                                                  ║
+  ║  MODOS                                                           ║
+  ║  📱 Un solo teléfono: se lo pasan entre los dos.                 ║
+  ║  🌐 Online: cada quien en su teléfono, conectados directamente   ║
+  ║     (sin servidor, sin cuentas). Ver sección "8. MODO ONLINE".   ║
+  ╚══════════════════════════════════════════════════════════════════╝
+-->
+
+<style>
+  /* =====================================================================
+     1. DISEÑO (CSS)
+     Los colores principales están en :root. Para cambiar la apariencia,
+     empieza por ahí.
+     ===================================================================== */
+  :root {
+    --bg1: #0f172a;               /* azul noche (fondo) */
+    --bg2: #1e1b4b;               /* índigo (fondo) */
+    --bg3: #31103f;               /* ciruela oscuro (fondo) */
+    --pink: #ec4899;              /* rosa de acento */
+    --purple: #8b5cf6;            /* violeta de acento */
+    --grad: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+    --text: #f8fafc;              /* texto principal */
+    --muted: #a5b0c6;             /* texto secundario */
+    --glass: rgba(255,255,255,.06);   /* fondo "cristal" */
+    --line: rgba(255,255,255,.14);    /* bordes suaves */
+    --input: rgba(0,0,0,.32);         /* fondo de campos de texto */
+    --c: #ec4899;                 /* color de la categoría activa (lo cambia el JS) */
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }   /* el atributo "hidden" siempre oculta */
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    font-family: var(--sans);
+    color: var(--text);
+    background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 55%, var(--bg3) 100%) fixed;
+    min-height: 100vh;
+    min-height: 100dvh;   /* altura real en móviles */
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    overflow-x: hidden;
+  }
+
+  /* Dos luces difuminadas de fondo (único movimiento decorativo) */
+  body::before, body::after {
+    content: ""; position: fixed; z-index: 0; pointer-events: none;
+    width: 60vmax; height: 60vmax; border-radius: 50%;
+    filter: blur(70px); opacity: .35;
+    animation: drift 26s ease-in-out infinite alternate;
+  }
+  body::before { background: radial-gradient(circle, #8b5cf6, transparent 65%); top: -25vmax; left: -20vmax; }
+  body::after  { background: radial-gradient(circle, #ec4899, transparent 65%); bottom: -28vmax; right: -22vmax; animation-delay: -9s; }
+  @keyframes drift { to { transform: translate(6vmax, 5vmax) scale(1.12); } }
+
+  .app { position: relative; z-index: 1; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ---------- Cabecera ---------- */
+  header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-top: 4px; }
+  .brand h1 {
+    font-family: var(--serif); font-weight: 700; font-size: clamp(1.7rem, 7vw, 2.1rem); line-height: 1.1;
+    background: linear-gradient(90deg, #f9a8d4, #c4b5fd);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .brand p { color: var(--muted); font-size: .9rem; margin-top: 6px; max-width: 28ch; }
+  .header-btns { display: flex; gap: 8px; }
+  .icon-btn {
+    flex: none; width: 46px; height: 46px; border-radius: 14px;
+    background: var(--glass); border: 1px solid var(--line); color: var(--text);
+    font-size: 1.2rem; cursor: pointer; display: grid; place-items: center;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,.12); }
+  :focus-visible { outline: 2px solid #f9a8d4; outline-offset: 2px; }
+
+  /* Indicador del modo de juego */
+  .pill {
+    align-self: flex-start; background: var(--glass); border: 1px solid var(--line); color: var(--muted);
+    padding: 8px 14px; border-radius: 999px; font-size: .82rem; cursor: pointer;
+  }
+  .pill.on   { color: #bbf7d0; border-color: rgba(74,222,128,.5); }
+  .pill.warn { color: #fde68a; border-color: rgba(253,230,138,.5); }
+
+  /* Nombres (solo modo un teléfono) */
+  .who { display: flex; gap: 8px; }
+  .who input { flex: 1; min-width: 0; padding: 11px 12px; font-size: .95rem; }
+
+  /* ---------- Filtros de categoría ---------- */
+  .filters { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .filters::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none; scroll-snap-align: start;
+    background: var(--glass); border: 1px solid var(--line); color: var(--muted);
+    padding: 10px 14px; border-radius: 999px; font-size: .88rem; cursor: pointer; white-space: nowrap;
+    transition: background .2s, color .2s, border-color .2s;
+  }
+  .chip small { opacity: .75; margin-left: 4px; font-size: .78rem; }
+  .chip.dim { opacity: .55; }
+  .chip.active { color: #fff; border-color: transparent; background: var(--c); box-shadow: 0 6px 18px -6px var(--c); }
+
+  /* ---------- Tarjeta de pregunta ---------- */
+  .card {
+    position: relative; background: var(--glass);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);   /* efecto cristal esmerilado */
+    border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+    border-radius: 28px; padding: 22px 22px 18px; min-height: 300px;
+    display: flex; flex-direction: column; gap: 12px;
+    box-shadow: 0 24px 50px -20px rgba(0,0,0,.6), 0 0 60px -30px var(--c);
+    transition: border-color .4s, box-shadow .4s;
+  }
+  .card-top { display: flex; justify-content: center; align-items: center; min-height: 30px; }
+  .badge {
+    font-size: .8rem; font-weight: 600; padding: 5px 12px; border-radius: 999px; color: #fff;
+    background: color-mix(in srgb, var(--c) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  }
+  .turn { text-align: center; font-size: .82rem; color: var(--muted); }
+
+  .question {
+    flex: 1; display: flex; align-items: center; justify-content: center; text-align: center;
+    font-family: var(--serif); font-size: clamp(1.3rem, 5.4vw, 1.65rem); line-height: 1.42; padding: 6px 2px; text-wrap: balance;
+  }
+  .question.rolling { filter: blur(2.5px); opacity: .55; }                 /* mientras gira */
+  .question.land { animation: land .55s cubic-bezier(.2,.9,.3,1.2); }     /* al aterrizar */
+  @keyframes land { from { transform: perspective(700px) rotateX(-70deg) scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .role-hint { text-align: center; color: #f9a8d4; font-size: .9rem; line-height: 1.4; }
+  .sp-result { text-align: center; font-size: .95rem; background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+
+  .acts { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+  .mini {
+    background: transparent; border: 1px solid var(--line); color: var(--muted);
+    padding: 9px 14px; border-radius: 999px; font-size: .86rem; cursor: pointer; min-height: 40px;
+  }
+  .mini:hover { color: #fff; border-color: rgba(255,255,255,.35); }
+  .mini.on { color: #fde68a; border-color: rgba(253,230,138,.5); }
+  .mini.wa { color: #86efac; border-color: rgba(74,222,128,.4); }
+  .sp-reply .mini { color: #fff; background: rgba(244,63,94,.18); border-color: rgba(244,63,94,.55); padding: 11px 16px; }
+
+  .progress { display: flex; align-items: center; gap: 12px; }
+  .progress .count { font-size: .82rem; color: var(--muted); white-space: nowrap; }
+  .bar { flex: 1; height: 5px; border-radius: 9px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--c); border-radius: 9px; transition: width .5s ease; }
+
+  /* ---------- Notas (solo las ve quien gira) ---------- */
+  .notes { background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 22px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .notes h2 { font-size: .95rem; font-weight: 600; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: .86rem; color: #f9a8d4; font-weight: 600; }
+  textarea, input[type="text"], select {
+    width: 100%; background: var(--input); color: #fff; font: inherit; font-size: 1rem;
+    border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 12px; outline: none;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  textarea:focus, input[type="text"]:focus, select:focus { border-color: var(--pink); }
+  select option { color: #111; }
+
+  /* ---------- Botones principales ---------- */
+  .controls { display: flex; flex-direction: column; gap: 12px; }
+  .btn-main {
+    width: 100%; background: var(--grad); color: #fff; border: 0; border-radius: 999px;
+    padding: 19px; font-size: 1.12rem; font-weight: 700; cursor: pointer;
+    box-shadow: 0 14px 30px -10px rgba(236,72,153,.65); transition: transform .15s;
+  }
+  .btn-main:active { transform: scale(.97); }
+  .btn-main:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+  .row { display: flex; gap: 10px; }
+  .btn-sub {
+    flex: 1; background: var(--glass); color: var(--text); border: 1px solid var(--line);
+    padding: 13px 10px; border-radius: 16px; font-size: .9rem; font-weight: 500; cursor: pointer; min-height: 48px;
+  }
+  .btn-sub:hover { background: rgba(255,255,255,.13); }
+  .btn-sub:disabled { opacity: .6; cursor: wait; }
+  .btn-danger { color: #fca5a5; border-color: rgba(239,68,68,.55); background: rgba(239,68,68,.12); }
+
+  footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 4px 0 0; }
+
+  /* ---------- Ventanas emergentes (<dialog>) ---------- */
+  dialog {
+    background: #1a1740; color: var(--text); border: 1px solid var(--line); border-radius: 26px;
+    width: min(540px, calc(100vw - 24px)); padding: 0; margin: auto; box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  }
+  dialog::backdrop { background: rgba(4,3,22,.75); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .sheet { display: flex; flex-direction: column; max-height: 86vh; max-height: 86dvh; }
+  .sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 18px 20px 12px; }
+  .sheet-head h2 { font-family: var(--serif); font-size: 1.25rem; font-weight: 700; }
+  .sheet-body { overflow-y: auto; padding: 4px 20px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .sheet-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 20px 18px; border-top: 1px solid var(--line); }
+  .sheet-foot .btn-sub { min-height: 44px; font-size: .85rem; }
+
+  .tabs { display: flex; gap: 6px; padding: 0 20px 8px; }
+  .tab { flex: 1; padding: 10px 4px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; font-size: .84rem; }
+  .tab.active { background: rgba(255,255,255,.1); color: #fff; }
+
+  /* Tarjetitas de las listas (notas, favoritas, partidas) */
+  .entry { background: rgba(255,255,255,.05); border-left: 3px solid var(--c); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .entry-top { display: flex; align-items: center; gap: 8px; font-size: .76rem; color: var(--muted); }
+  .entry-top .sp { flex: 1; }
+  .entry-q { font-family: var(--serif); font-size: 1rem; line-height: 1.4; }
+  .entry-a { font-size: .92rem; line-height: 1.4; }
+  .entry-a b { color: #f9a8d4; font-weight: 600; }
+  .entry-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .entry-actions .btn-sub { min-height: 40px; padding: 8px; font-size: .84rem; }
+  .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 4px 8px; border-radius: 8px; }
+  .x:hover { color: #fca5a5; }
+  .empty { color: var(--muted); text-align: center; padding: 26px 10px; font-size: .95rem; line-height: 1.5; }
+
+  .set-group { display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .set-group:last-child { border-bottom: 0; }
+  .set-group h3 { font-size: .95rem; }
+  .set-group p, .step { font-size: .84rem; color: var(--muted); line-height: 1.45; }
+  .step b { color: #fff; }
+  .switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: .92rem; min-height: 44px; }
+  .switch input { width: 22px; height: 22px; accent-color: var(--pink); }
+  .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .72rem; min-height: 96px; word-break: break-all; }
+  .net-status { font-size: .92rem; line-height: 1.4; }
+
+  .confirm { padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 18px; }
+  .confirm p { font-size: 1rem; line-height: 1.45; }
+  .confirm .row { justify-content: flex-end; }
+  .confirm .btn-sub { flex: none; padding: 12px 20px; }
+
+  /* Aviso flotante (reemplaza a alert()) */
+  .toast {
+    position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translate(-50%, 30px);
+    background: #2a2560; border: 1px solid var(--line); color: #fff; padding: 12px 18px; border-radius: 14px;
+    font-size: .9rem; opacity: 0; pointer-events: none; z-index: 200; max-width: calc(100vw - 32px); text-align: center;
+    transition: opacity .25s, transform .25s;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    body::before, body::after { animation: none; }
+    .question.land { animation: none; }
+    .question.rolling { filter: none; }
+    * { transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- =====================================================================
+     HTML: la estructura de la página. Cada elemento con id="..." lo usa
+     el JavaScript de más abajo para mostrar u ocultar cosas.
+     ===================================================================== -->
+<main class="app">
+  <header>
+    <div class="brand">
+      <h1>Flowers 🌸</h1>
+      <p>Juego de conexión y citas para parejas. Sin registros, solo buenas conversaciones.</p>
+    </div>
+    <div class="header-btns">
+      <button class="icon-btn" id="btnMode" aria-label="Modo de juego (un teléfono u online)" title="Modo de juego">🌐</button>
+      <button class="icon-btn" id="btnGames" aria-label="Partidas guardadas" title="Partidas">💾</button>
+      <button class="icon-btn" id="btnSettings" aria-label="Ajustes" title="Ajustes">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Indicador del modo actual (toca para cambiar) -->
+  <button class="pill" id="modePill" type="button"></button>
+
+  <!-- Nombres: solo se ven en el modo "un solo teléfono" -->
+  <div class="who" id="who">
+    <input type="text" id="quickA" maxlength="20" placeholder="Tu nombre" autocomplete="off" aria-label="Tu nombre">
+    <input type="text" id="quickB" maxlength="20" placeholder="Su nombre" autocomplete="off" aria-label="Su nombre">
+  </div>
+
+  <!-- Botones de categoría (los genera el JS) -->
+  <nav class="filters" id="filters" aria-label="Categorías"></nav>
+
+  <!-- Tarjeta donde se muestra la pregunta -->
+  <section class="card" aria-label="Pregunta actual">
+    <div class="card-top"><span class="badge" id="badge">¿Listos?</span></div>
+    <p class="turn" id="turn" hidden></p>
+    <p class="question" id="question" aria-live="polite"></p>
+    <p class="role-hint" id="roleHint" hidden></p>
+
+    <!-- Respuestas del "Momento especial" (las elige quien responde) -->
+    <div class="acts sp-reply" id="spReply" hidden>
+      <button class="mini" id="btnYes" type="button"></button>
+      <button class="mini" id="btnMaybe" type="button"></button>
+    </div>
+    <p class="sp-result" id="spResult" hidden></p>
+
+    <div class="acts" id="cardActions" hidden>
+      <button class="mini" id="btnFav" type="button">☆ Favorita</button>
+      <button class="mini" id="btnSkip" type="button">⏭ Otra pregunta</button>
+    </div>
+    <div class="acts" id="waRow" hidden>
+      <button class="mini wa" id="btnWA" type="button">📲 Enviar por WhatsApp</button>
+    </div>
+
+    <div class="progress">
+      <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+      <span class="count" id="count">Restantes: --</span>
+    </div>
+  </section>
+
+  <!-- Anotar la respuesta: SOLO la ve quien gira la ruleta (quien pregunta) -->
+  <section class="notes" id="notes" hidden>
+    <h2>📝 Anotar la respuesta</h2>
+    <div class="field">
+      <label for="noteA" id="labelA">Respuesta</label>
+      <textarea id="noteA" maxlength="500" placeholder="Lo que quieras recordar de su respuesta…"></textarea>
+    </div>
+  </section>
+
+  <!-- Botones de control -->
+  <div class="controls">
+    <button class="btn-main" id="btnSpin" type="button">🎰 Girar ruleta</button>
+    <div class="row">
+      <button class="btn-sub" id="btnHistory" type="button">📖 Recuerdos (<span id="savedCount">0</span>)</button>
+      <button class="btn-sub" id="btnReset" type="button">🔄 Reiniciar mazo</button>
+    </div>
+  </div>
+
+  <footer id="footer"></footer>
+</main>
+
+<!-- Ventana: recuerdos (respuestas, favoritas y preguntas ya vistas) -->
+<dialog id="dlgHistory" aria-labelledby="histTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="histTitle">📖 Recuerdos de la cita</h2>
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" id="tabNotes" type="button">Respuestas</button>
+      <button class="tab" id="tabFavs" type="button">⭐ Favoritas</button>
+      <button class="tab" id="tabSeen" type="button">👁 Vistas</button>
+    </div>
+    <div class="sheet-body" id="histList"></div>
+    <div class="sheet-foot" id="histFoot">
+      <button class="btn-sub" id="btnCopy" type="button">📋 Copiar</button>
+      <button class="btn-sub" id="btnWAnotes" type="button">📲 WhatsApp</button>
+      <button class="btn-sub btn-danger" id="btnClear" type="button">🗑️ Borrar notas</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Ventana: partidas guardadas -->
+<dialog id="dlgGames" aria-labelledby="gamesTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="gamesTitle">💾 Partidas</h2>
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="set-group">
+        <h3>Guardar la partida actual</h3>
+        <p>Guarda las preguntas ya vistas, las respuestas anotadas y la categoría. Puedes retomarla cuando quieras.</p>
+        <input type="text" id="gameName" maxlength="40" placeholder="Nombre (ej: Cita Aniversario)" autocomplete="off">
+        <button class="btn-sub" id="btnSaveGame" type="button">💾 Guardar partida</button>
+      </div>
+      <div class="set-group">
+        <h3>Partidas guardadas</h3>
+        <div id="gamesList" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn-sub btn-danger" id="btnNewGame" type="button">🆕 Empezar partida nueva</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Ventana: modo de juego (un teléfono / online) -->
+<dialog id="dlgMode" aria-labelledby="modeTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="modeTitle">🌐 Modo de juego</h2>
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="set-group">
+        <p class="net-status" id="netStatus" style="color:#fff"></p>
+        <button class="btn-sub" id="btnModeLocal" type="button">📱 Usar un solo teléfono</button>
+        <p>Un solo teléfono: se lo pasan. Quien gira la ruleta pregunta y anota; la otra persona responde.</p>
+      </div>
+
+      <div class="set-group" id="onlineChoices">
+        <h3>🌐 Online: cada quien en su teléfono</h3>
+        <p>Los dos teléfonos se conectan directamente entre sí: sin cuentas y sin servidor. Solo necesitan pasarse dos códigos por WhatsApp (o como quieran). Ambos deben estar en línea al mismo tiempo.</p>
+        <input type="text" id="myName" maxlength="20" placeholder="Tu nombre (opcional)" autocomplete="off">
+        <div class="row">
+          <button class="btn-sub" id="btnHost" type="button">➕ Crear sala</button>
+          <button class="btn-sub" id="btnJoin" type="button">🔗 Unirme a una sala</button>
+        </div>
+      </div>
+
+      <!-- Pasos de quien CREA la sala -->
+      <div class="set-group" id="pairHost" hidden>
+        <p class="step"><b>Paso 1.</b> Envía este código a tu pareja:</p>
+        <textarea class="code" id="offerOut" readonly spellcheck="false" placeholder="Generando código…"></textarea>
+        <div class="row">
+          <button class="btn-sub" id="btnCopyOffer" type="button">📋 Copiar</button>
+          <button class="btn-sub" id="btnShareOffer" type="button">📤 Compartir</button>
+        </div>
+        <p class="step"><b>Paso 2.</b> Cuando te devuelva su código de respuesta, pégalo aquí:</p>
+        <textarea class="code" id="answerIn" spellcheck="false" placeholder="Pega aquí el código de respuesta"></textarea>
+        <button class="btn-sub" id="btnConnect" type="button">🔗 Conectar</button>
+      </div>
+
+      <!-- Pasos de quien SE UNE a la sala -->
+      <div class="set-group" id="pairJoin" hidden>
+        <p class="step"><b>Paso 1.</b> Pega el código de invitación que te enviaron:</p>
+        <textarea class="code" id="offerIn" spellcheck="false" placeholder="Pega aquí el código de invitación"></textarea>
+        <button class="btn-sub" id="btnMakeAnswer" type="button">✅ Generar mi respuesta</button>
+        <p class="step"><b>Paso 2.</b> Envía este código de vuelta. Cuando lo peguen, se conectarán solos:</p>
+        <textarea class="code" id="answerOut" readonly spellcheck="false" placeholder="Aquí aparecerá tu código de respuesta"></textarea>
+        <div class="row">
+          <button class="btn-sub" id="btnCopyAnswer" type="button">📋 Copiar</button>
+          <button class="btn-sub" id="btnShareAnswer" type="button">📤 Compartir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Ventana: ajustes -->
+<dialog id="dlgSettings" aria-labelledby="setTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="setTitle">⚙️ Ajustes</h2>
+      <button class="x" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="set-group">
+        <label class="switch"><span>💌 Momento especial cada 3 preguntas</span><input type="checkbox" id="optSpecial"></label>
+        <label class="switch"><span>Vibración al girar (móvil)</span><input type="checkbox" id="optVibrate"></label>
+      </div>
+      <div class="set-group">
+        <h3>Añadir una pregunta propia</h3>
+        <p>Sirve para agregar preguntas rápido desde el teléfono (quedan guardadas en este dispositivo). Para agregarlas de forma permanente en el archivo, usa la sección “BANCO DE PREGUNTAS” del código.</p>
+        <select id="customCat" aria-label="Categoría de la pregunta"></select>
+        <input type="text" id="customText" maxlength="180" placeholder="Escribe tu pregunta…" autocomplete="off">
+        <button class="btn-sub" id="btnAddCustom" type="button">➕ Añadir al mazo</button>
+        <div id="customList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Ventana: confirmación (reemplaza a confirm()) -->
+<dialog id="dlgConfirm">
+  <form method="dialog" class="confirm">
+    <p id="confirmMsg"></p>
+    <div class="row">
+      <button class="btn-sub" value="cancel">Cancelar</button>
+      <button class="btn-sub btn-danger" value="ok" id="confirmOk">Confirmar</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* =====================================================================
+     2. BANCO DE PREGUNTAS  ←←← AQUÍ AGREGAS PREGUNTAS NUEVAS
+     ---------------------------------------------------------------------
+     CÓMO AGREGAR UNA PREGUNTA (paso a paso):
+
+       1. Busca la lista de la categoría donde la quieres (por ejemplo
+          "romance:" o "dilemas:").
+       2. Ve al final de esa lista, justo antes del cierre "]".
+       3. Agrega una coma "," al final de la última pregunta.
+       4. Escribe tu pregunta entre comillas simples '...'  y NADA MÁS.
+          Ejemplo:
+              '¿Cuál fue el mejor regalo que has recibido?',
+
+     REGLAS IMPORTANTES:
+       • Cada pregunta va entre comillas simples '...' y termina con coma.
+       • Si tu pregunta lleva un apóstrofo ('), escríbelo con barra: \'
+       • No hace falta numerarlas ni ponerles ID: el juego lo hace solo.
+       • Puedes agregarlas al principio, en medio o al final de la lista.
+       • Las partidas guardadas NO se dañan al agregar preguntas nuevas.
+       • Si CAMBIAS el texto de una pregunta existente, el juego la
+         tratará como una pregunta nueva (aunque ya hubiera salido).
+       • Escríbelas pensando en que las lee UNA persona y responde LA OTRA:
+         "¿Qué te hace…?" funciona mejor que "¿Qué nos hace…?".
+       • Modo ONLINE: si los dos usan el mismo archivo, todo coincide. Si
+         agregaste preguntas solo en un teléfono, esas solo salen si ese
+         teléfono es quien creó la sala.
+
+     CÓMO CREAR UNA CATEGORÍA NUEVA (por ejemplo "Familia"):
+       1. En la sección 3 (CATEGORÍAS) agrega una línea igual a las demás:
+              familia: { label: 'Familia', emoji: '👨‍👩‍👧', color: '#22c55e' },
+       2. Aquí abajo agrega una lista con el mismo nombre:
+              familia: [
+                '¿Qué tradición familiar te gustaría conservar?',
+              ],
+       Listo: aparecerá sola como botón de filtro.
+
+     El pie de página muestra el total de preguntas, así compruebas que
+     se sumaron bien.
+     ===================================================================== */
+  const RAW = {
+
+    /* ---------- 🧊 ROMPEHIELOS: risas, curiosidades y anécdotas ---------- */
+    rompehielos: [
+      '¿Cuál es la teoría conspirativa más absurda que en el fondo te causa gracia?',
+      'Si tuvieras que vivir dentro de una película o serie durante un año, ¿cuál elegirías?',
+      '¿Cuál ha sido la compra más inútil pero divertida que has hecho en tu vida?',
+      'Si pudieras dominar una habilidad de la noche a la mañana sin esfuerzo, ¿cuál sería?',
+      '¿Qué comida podrías comer todos los días del año sin cansarte jamás?',
+      '¿Cuál es tu placer culpable en la música, el cine o la televisión?',
+      '¿Qué es lo más vergonzoso pero divertido que te ha pasado en público?',
+      '¿Cuál es el apodo más raro que te han puesto y de dónde salió?',
+      'Si tu vida tuviera banda sonora, ¿qué canción sonaría cuando entras a una habitación?',
+      'Si abrieras un negocio absurdo pero exitoso, ¿de qué sería?',
+      '¿Qué es lo más raro que has comido y volverías a probar?',
+      '¿Cuál fue la mejor travesura de tu infancia?',
+      'Si fueras un supervillano cómico, ¿cuál sería tu poder inofensivo?',
+      '¿Qué app de tu móvil usas más de lo que te gustaría admitir?',
+      '¿Qué moda o peinado del pasado te dio vergüenza pero en el fondo no te arrepientes?',
+      '¿Qué cosa creíste durante años hasta que alguien te sacó del error?',
+      '¿Qué serie o juego terminaste en un fin de semana sin salir de casa?',
+      'Si pudieras tener un superpoder que solo funcionara en situaciones cotidianas, ¿cuál elegirías?',
+      '¿Qué animal serías por la mañana, por la tarde y por la noche?',
+      '¿Qué objeto de tu casa tiene la historia más curiosa?',
+      '¿Cuál es el consejo más raro que te han dado y qué tal te fue al seguirlo?',
+      '¿Qué talento inútil tienes que casi nadie conoce?',
+      '¿Cuál es tu excusa favorita para llegar tarde o cancelar planes?',
+      '¿Cuál es el meme o video que más veces has visto sin cansarte?',
+      '¿Qué harías con un día entero en el que nadie pudiera juzgarte?',
+      '¿Cuál es el plan más loco que aceptaste sin pensarlo demasiado?',
+      'Si pudieras cambiarte el nombre por un día, ¿cuál elegirías?',
+      '¿Qué canción cantas a todo pulmón cuando nadie te escucha?',
+      '¿Cuál es la peor película que te encantó?',
+      'Si tuvieras una mascota exótica, ¿cuál sería y cómo la llamarías?'
+    ],
+
+    /* ---------- 💖 CHISPA Y ROMANCE: química, coqueteo y detalles ---------- */
+    romance: [
+      '¿Qué fue lo primero que notaste de mí cuando nos conocimos?',
+      '¿Cómo sería una cita ideal según tu estilo personal, sin caer en clichés?',
+      '¿Qué detalle pequeño o gesto te conecta de inmediato con alguien?',
+      '¿Qué te parece increíblemente atractivo en una persona y casi nadie lo nota?',
+      'Si hiciéramos una escapada improvisada este fin de semana, ¿a dónde iríamos?',
+      '¿Qué canción te transmite una vibra romántica de inmediato?',
+      '¿Qué halago sincero que te hicieron jamás vas a olvidar?',
+      '¿Cuál es tu lenguaje del amor: palabras, tiempo juntos, regalos, ayuda o contacto físico?',
+      '¿Qué te gustaría que hiciéramos juntos al menos una vez en la vida?',
+      '¿Cuál sería tu plan perfecto para un domingo de lluvia juntos?',
+      '¿Cuál es el detalle romántico más lindo que han tenido contigo?',
+      'Si tuvieras que regalarme algo sin gastar dinero, ¿qué sería?',
+      '¿Cómo describes la química entre dos personas en solo tres palabras?',
+      '¿Prefieres que te sorprendan con un plan improvisado o que lo organicen con tiempo?',
+      '¿Cuál es la mejor primera cita que recuerdes, real o de película?',
+      '¿Qué pequeña costumbre de pareja te parece adorable?',
+      '¿Qué aroma, lugar o sonido te hace sentir enamorado?',
+      '¿Qué es lo que más disfrutas de una conversación larga de madrugada?',
+      'Cuando extrañas a alguien, ¿prefieres mensajes largos, notas de voz o llamadas?',
+      '¿Qué película o serie verías con alguien una y otra vez sin aburrirte?',
+      '¿Qué te hace sentir más cómodo en una primera cita: caminar, comer o algo activo?',
+      '¿Qué es lo más romántico que alguien ha hecho por ti, grande o pequeño?',
+      '¿Qué detalle en la forma de hablar de alguien te resulta irresistible?',
+      '¿Cuál es tu idea de una noche perfecta en casa?',
+      '¿Qué canción elegirías como banda sonora de una noche especial?',
+      '¿Cómo te gusta que te muestren interés sin agobiarte?',
+      '¿Qué te da mariposas en el estómago: una mirada, una risa o un mensaje inesperado?',
+      '¿Cuál es el lugar más romántico que has visitado o sueñas con visitar?',
+      '¿Qué sueles hacer cuando alguien te gusta y no sabes cómo decírselo?',
+      '¿Cuándo te parece el momento adecuado para decir “te quiero”?'
+    ],
+
+    /* ---------- 🧠 CONEXIÓN PROFUNDA: sueños, valores y reflexiones ---------- */
+    profundas: [
+      '¿Qué lección de vida aprendiste de la manera difícil y hoy agradeces tener?',
+      '¿Qué pequeño detalle te hace sentir de verdad valorado y querido?',
+      '¿Cuál es un sueño o meta personal que aún no le has contado a casi nadie?',
+      '¿Qué cualidad valoras más en una persona con la que compartes tu tiempo?',
+      '¿Qué logro o parte de ti te llena de orgullo?',
+      '¿Cómo sueles reaccionar y qué necesitas cuando atraviesas un día difícil?',
+      '¿Qué significa para ti tener un “día perfecto”?',
+      '¿Qué miedo te gustaría dejar de sentir?',
+      '¿Qué valor no negociarías nunca en una relación?',
+      '¿Qué te gustaría que la gente entendiera mejor de ti?',
+      '¿Cómo te imaginas tu vida dentro de cinco años?',
+      '¿Qué tradición familiar te gustaría conservar o crear?',
+      'Si pudieras cenar y conversar con cualquier persona de la historia, ¿a quién elegirías?',
+      'Cuando compartes algo vulnerable, ¿qué necesitas de la otra persona: escucha, consejo o un abrazo?',
+      '¿Qué momento de tu infancia sigue influyendo en quién eres hoy?',
+      '¿Cuándo sentiste que habías cambiado de verdad como persona?',
+      '¿Qué te da paz cuando todo se siente demasiado?',
+      '¿Qué decisión difícil tomaste y hoy sabes que fue la correcta?',
+      '¿Quién te enseñó más sobre cómo querer y dejarte querer?',
+      '¿Cuál es lo más valiente que has hecho?',
+      '¿Qué te gustaría haber sabido a los 18 años?',
+      '¿Qué error te enseñó más de lo que esperabas?',
+      '¿Qué significa para ti sentirte en casa?',
+      '¿Qué papel juega la familia en tu vida hoy?',
+      '¿Qué haces cuando necesitas espacio y cómo te gustaría que lo respeten?',
+      '¿Qué es lo que más valoras de tus amistades?',
+      '¿Qué cambiarías de tu forma de ver el mundo si pudieras?',
+      '¿Qué te gustaría que dijeran de ti las personas que más te quieren?',
+      '¿Cuál es la conversación pendiente que más te gustaría tener?',
+      '¿Cómo defines el éxito para ti, más allá del dinero?'
+    ],
+
+    /* ---------- ⚖️ DILEMAS: debates divertidos "¿qué preferirías?" ---------- */
+    dilemas: [
+      '¿Preferirías viajar 100 años al pasado o 100 años al futuro juntos?',
+      '¿Preferirías no usar el móvil un mes o no ver películas ni series durante 6 meses?',
+      '¿Preferirías unas vacaciones en una cabaña en la montaña o en una playa paradisíaca?',
+      '¿Preferirías no volver a madrugar nunca o no volver a cocinar nunca?',
+      '¿Preferirías una cena elegante o una noche de pizza y manta?',
+      '¿Preferirías mucho dinero y poco tiempo libre, o poco dinero y todo el tiempo del mundo?',
+      '¿Preferirías un viaje sorpresa sin saber el destino o uno planeado al detalle?',
+      '¿Preferirías vivir en una ciudad enorme y vibrante o en un pueblo tranquilo?',
+      '¿Preferirías poder teletransportarte o poder volar?',
+      '¿Preferirías recordar absolutamente todo lo que vives o poder olvidar lo que quieras?',
+      '¿Preferirías saber siempre cuándo alguien miente o poder leer la mente una vez al día?',
+      '¿Preferirías tener un chef personal a diario o un asistente que limpie todo por ti?',
+      '¿Preferirías hablar todos los idiomas del mundo o poder comunicarte con los animales?',
+      '¿Preferirías poder pausar el tiempo o rebobinarlo 10 minutos?',
+      '¿Preferirías ser la persona más graciosa del grupo o la más sabia?',
+      '¿Preferirías la mejor cena de tu vida una sola vez o muy buenas cenas cada semana?',
+      '¿Preferirías dormir siempre 10 horas o solo 4 sintiéndote descansado?',
+      '¿Preferirías conocer a tu yo de hace 10 años o a tu yo de dentro de 10 años?',
+      '¿Preferirías que tu vida fuera una comedia o un drama romántico?',
+      '¿Preferirías un año viajando sin parar o un año construyendo un proyecto propio?',
+      '¿Preferirías una casa enorme lejos de todo o un piso pequeño en el centro?',
+      '¿Preferirías conocer todo tu futuro o dejarlo como una sorpresa?',
+      '¿Preferirías desayunar siempre dulce o desayunar siempre salado?',
+      '¿Preferirías un mensaje de buenos días o una llamada corta cada noche?',
+      '¿Preferirías vivir en un verano eterno o en un otoño eterno?',
+      '¿Preferirías una cita en un concierto o una cita en un museo?',
+      '¿Preferirías ser muy famoso o pasar totalmente desapercibido?',
+      '¿Preferirías un pequeño lujo cada día o un gran lujo una vez al año?',
+      '¿Preferirías cantar en público o bailar en público sin previo aviso?',
+      '¿Preferirías que siempre te den la razón o aprender algo nuevo cada día?'
+    ],
+
+    /* ---------- 🎯 RETOS: mini actividades para hacer juntos ---------- */
+    retos: [
+      'Reto: mírense a los ojos en silencio durante 30 segundos. Luego cuenten qué sintieron.',
+      'Reto: cada uno dice tres cosas que ha notado del otro esta noche.',
+      'Reto: elijan una canción y compártanla. ¿Qué recuerdo les trae?',
+      'Reto: cuenten una historia de su infancia que el otro no conozca.',
+      'Reto: predigan la respuesta del otro a “¿cuál es tu película favorita?” y comprueben quién acertó.',
+      'Reto: hagan un brindis por algo pequeño que celebren hoy.',
+      'Reto: planeen juntos una cita imaginaria para dentro de un mes en solo tres frases.',
+      'Reto: inventen juntos un nombre y un eslogan para su dúo.',
+      'Reto: describan al otro con una sola palabra y expliquen por qué.',
+      'Reto: háganse un cumplido sincero mirándose a los ojos.',
+      'Reto: cada uno describe en un minuto su lugar ideal para vivir, sin decir el nombre del sitio.',
+      'Reto: cada uno enseña la foto más divertida de su galería y cuenta el contexto.',
+      'Reto: cada uno dice tres cosas por las que está agradecido hoy.',
+      'Reto: cada uno imita a un personaje famoso y el otro adivina quién es.',
+      'Reto: elijan un lugar del mundo y planeen en dos minutos qué harían allí el primer día.',
+      'Reto: cada uno comparte un recuerdo feliz que huela, suene o sepa a algo concreto.',
+      'Reto: escriban en una servilleta o nota una meta para este año y léanla en voz alta.',
+      'Reto: cuenten un secreto o manía graciosa que pocos sepan de ustedes.',
+      'Reto: representen con mímica su comida favorita hasta que el otro la adivine.',
+      'Reto: elijan una canción de fondo para acompañar el resto de la cita.',
+      'Reto: cada uno cuenta su mejor recuerdo de un verano.',
+      'Reto: hagan una lista de tres cosas que quieren probar juntos y elijan una.',
+      'Reto: cada uno dice cuál sería su pedido perfecto en un restaurante y por qué.',
+      'Reto: inventen una historia de cinco frases; cada uno dice una frase, alternando.',
+      'Reto: cada uno enseña un baile ridículo de 10 segundos.',
+      'Reto: cada uno dice algo que le da curiosidad del otro y el otro responde.',
+      'Reto: hagan un pacto pequeño y divertido para la próxima vez que se vean.',
+      'Reto: cada uno cuenta su día de hoy como si fuera el resumen de una película.',
+      'Reto: elijan una palabra que describa cómo se sienten ahora mismo y expliquen por qué.',
+      'Reto: tómense una foto juntos, si quieren, con la pose más absurda que se les ocurra.'
+    ]
+  };
+
+  /* =====================================================================
+     2b. MOMENTOS ESPECIALES 💌
+     ---------------------------------------------------------------------
+     Cada 3 preguntas, en lugar de una pregunta sale un "momento
+     especial": un mensaje para quien RESPONDE, con dos respuestas para
+     elegir. Salen en orden y, al terminar la lista, vuelven a empezar.
+
+     CÓMO AGREGAR UNO: copia una línea y cámbiale los textos.
+       t → el mensaje (si hay nombre, se antepone: "Ana, te quiero…")
+       a → primera respuesta posible
+       b → segunda respuesta posible
+     Se puede desactivar desde ⚙️ Ajustes.
+     ===================================================================== */
+  const SPECIALS = [
+    { t: 'te quiero invitar a una cita. ¿Qué dices? 🌹',                          a: '💖 ¡Sí, claro!',       b: '😏 Déjame pensarlo' },
+    { t: '¿te parece bien el lunes? Si no, dime qué día te queda mejor. 📅',      a: '📅 El lunes va bien',  b: '🗓️ Mejor otro día' },
+    { t: 'yo pongo el plan y tú pones la hora. ¿Trato hecho? 🤝',                 a: '🤝 Trato hecho',       b: '🕐 Negociemos' },
+    { t: 'para la cita, ¿qué te apetece más: cena, café o paseo? 🍷',             a: '🍷 Una cena',          b: '☕ Café o paseo' },
+    { t: 'prométeme que después de esta cita habrá una segunda. 💫',              a: '💫 Prometido',         b: '😉 Ya veremos' }
+  ];
+
+  /* =====================================================================
+     3. CATEGORÍAS
+     ---------------------------------------------------------------------
+     Cada categoría tiene:
+       label → el nombre que se ve en el botón
+       emoji → el ícono
+       color → el color de acento (hex) de la tarjeta y la barra
+     La clave (rompehielos, romance…) debe coincidir con la de RAW.
+     "all" es la mezcla de todas y NO lleva lista de preguntas.
+     ===================================================================== */
+  const CATS = {
+    all:         { label: 'Todas',             emoji: '✨', color: '#ec4899' },
+    rompehielos: { label: 'Rompehielos',       emoji: '🧊', color: '#60a5fa' },
+    romance:     { label: 'Chispa y Romance',  emoji: '💖', color: '#ec4899' },
+    profundas:   { label: 'Conexión profunda', emoji: '🧠', color: '#8b5cf6' },
+    dilemas:     { label: 'Dilemas',           emoji: '⚖️', color: '#f59e0b' },
+    retos:       { label: 'Retos',             emoji: '🎯', color: '#2dd4bf' }
+  };
+  const SP = { label: 'Momento especial', emoji: '💌', color: '#f43f5e' };   // los momentos especiales
+  const catOf = k => k === 'especial' ? SP : (CATS[k] || CATS.all);
+
+  /* =====================================================================
+     4. PREPARAR LAS PREGUNTAS
+     ---------------------------------------------------------------------
+     Convierte las listas de arriba en objetos { id, c, t }:
+       id → identificador ESTABLE calculado a partir del texto (así las
+            partidas guardadas siguen funcionando aunque agregues
+            preguntas nuevas en cualquier lugar de la lista).
+       c  → categoría
+       t  → texto de la pregunta
+     No necesitas tocar esta parte.
+     ===================================================================== */
+  function idFor(cat, text) {
+    let hash = 5381;                       // función hash simple (djb2)
+    const s = cat + '|' + text;
+    for (let i = 0; i < s.length; i++) hash = ((hash << 5) + hash + s.charCodeAt(i)) | 0;
+    return 'q' + (hash >>> 0).toString(36);
+  }
+
+  const DEFAULTS = [];
+  const seenIds = new Set();
+  Object.entries(RAW).forEach(([cat, list]) => {
+    if (!CATS[cat]) { console.warn(`La categoría "${cat}" está en RAW pero no en CATS. Agrégala en la sección 3.`); return; }
+    list.forEach(t => {
+      const id = idFor(cat, t);
+      if (seenIds.has(id)) { console.warn('Pregunta repetida (se ignora):', t); return; }
+      seenIds.add(id);
+      DEFAULTS.push({ id, c: cat, t });
+    });
+  });
+
+  /* =====================================================================
+     5. ESTADO Y GUARDADO
+     ---------------------------------------------------------------------
+     Todo se guarda en el navegador (localStorage) bajo una sola clave.
+
+     S.game → la PARTIDA ACTUAL (esto es lo que se guarda en "Partidas"):
+        used     : ids de preguntas que YA SALIERON (se ocultan del mazo)
+        current  : id de la pregunta a la vista (o null)
+        spinner  : quién gira la ruleta AHORA (0 = Persona A, 1 = Persona B).
+                   Esa persona pregunta y anota; la otra responde.
+        category : categoría activa
+        notes    : respuestas anotadas
+        since    : preguntas desde el último momento especial
+        spIdx    : cuál momento especial toca después
+        special  : índice del momento especial a la vista (o null)
+        spDone   : si ya se respondió ese momento especial
+        spAnswer : texto de la respuesta elegida
+        seq      : contador que sube con cada pregunta nueva (sirve para
+                   animar la ruleta y para sincronizar el modo online)
+
+     Común a todas las partidas:
+        favs, custom (preguntas propias), names {a,b} (un teléfono),
+        myName (online), specials, vibrate, saves (partidas guardadas)
+     ===================================================================== */
+  const KEY = 'flowers_game_v2';
+  const OLD_KEY = 'flowers_game_v1';    // versión anterior: se lee para no perder tus datos
+  const store = {
+    get(fallback) {
+      try { const v = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY); return v ? JSON.parse(v) : fallback; }
+      catch { return fallback; }
+    },
+    set(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* sin almacenamiento */ } }
+  };
+  const clone = o => JSON.parse(JSON.stringify(o));
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const newGame = (category = 'all') => ({
+    used: [], current: null, spinner: 0, category, notes: [],
+    since: 0, spIdx: 0, special: null, spDone: false, spAnswer: '', seq: 0
+  });
+
+  const saved = store.get({});
+  const customSaved = Array.isArray(saved.custom) ? saved.custom : [];
+  const S = {
+    game: Object.assign(newGame(), saved.game || {}),
+    // favoritas: antes eran solo ids; ahora guardan también el texto
+    favs: (Array.isArray(saved.favs) ? saved.favs : [])
+      .map(f => typeof f === 'string' ? (DEFAULTS.concat(customSaved).find(q => q.id === f) || null) : f)
+      .filter(f => f && f.id && f.t),
+    custom: customSaved,
+    names: Object.assign({ a: '', b: '' }, saved.names || {}),
+    myName: saved.myName || '',
+    specials: saved.specials !== false,
+    vibrate: saved.vibrate !== false,
+    saves: Array.isArray(saved.saves) ? saved.saves : []
+  };
+  if (!CATS[S.game.category]) S.game.category = 'all';
+  const save = () => store.set(S);
+
+  /* =====================================================================
+     6. UTILIDADES
+     ===================================================================== */
+  const $ = s => document.querySelector(s);
+
+  // Crea un elemento HTML de forma segura (el texto NUNCA se interpreta como HTML).
+  function h(tag, attrs = {}, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v);
+    }
+    kids.flat().forEach(kid => { if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(kid)); });
+    return el;
+  }
+
+  const allQs   = () => DEFAULTS.concat(S.custom);                                   // todas las preguntas
+  const getQ    = id => allQs().find(q => q.id === id) || null;                      // buscar por id
+  const poolOf  = cat => allQs().filter(q => cat === 'all' || q.c === cat);          // preguntas de una categoría
+  const remainingOf = cat => poolOf(cat).filter(q => !S.game.used.includes(q.id));   // las que AÚN NO han salido
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fmt = ts => new Date(ts).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const hasPlay = g => g.current != null || g.special != null;                       // ¿hay pregunta o momento especial a la vista?
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  // Pregunta de confirmación: devuelve una promesa true/false
+  function ask(msg, okLabel) {
+    return new Promise(res => {
+      const d = $('#dlgConfirm');
+      $('#confirmMsg').textContent = msg;
+      $('#confirmOk').textContent = okLabel || 'Confirmar';
+      d.returnValue = '';
+      d.addEventListener('close', () => res(d.returnValue === 'ok'), { once: true });
+      d.showModal();
+    });
+  }
+
+  async function copyText(text, okMsg) {
+    try { await navigator.clipboard.writeText(text); toast(okMsg || '📋 Copiado'); return; } catch { /* plan B */ }
+    const ta = h('textarea', { style: 'position:fixed;opacity:0' }); ta.value = text;
+    document.body.append(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch {}
+    ta.remove();
+    toast(ok ? (okMsg || '📋 Copiado') : 'No se pudo copiar');
+  }
+
+  /* =====================================================================
+     7. MODO, JUGADORES Y TURNOS
+     ---------------------------------------------------------------------
+     mode = 'local'  → un solo teléfono (los dos se lo pasan)
+            'host'   → online, eres quien CREÓ la sala (Persona A, jugador 0)
+            'guest'  → online, te UNISTE a la sala   (Persona B, jugador 1)
+
+     En 'local' y 'host' el juego corre en ESTE teléfono (S.game).
+     En 'guest' este teléfono solo muestra lo que envía el anfitrión
+     (la variable "remote") y le manda las acciones que hagas.
+     ===================================================================== */
+  let mode = 'local';
+  let connected = false;      // ¿hay conexión online activa?
+  let remote = null;          // (guest) último estado recibido del anfitrión
+  let peerName = '';          // (host) nombre de la otra persona
+  let busy = false;           // true mientras gira la ruleta
+  let guestWaiting = false;   // (guest) esperando respuesta del anfitrión
+
+  const me = () => mode === 'host' ? 0 : mode === 'guest' ? 1 : -1;
+
+  // Nombre "crudo" escrito por la persona ('' si no puso ninguno)
+  function rawName(i) {
+    if (mode === 'guest') return String((remote && remote.names && remote.names[i]) || '').trim();
+    if (mode === 'host')  return String(i === 0 ? S.myName : peerName).trim();
+    return String(i === 0 ? S.names.a : S.names.b).trim();
+  }
+  const NAME  = i => rawName(i) || (i === 0 ? 'Persona A' : 'Persona B');
+  const LABEL = i => NAME(i) + (me() === i ? ' (tú)' : '');
+
+  // ¿Puedo girar / pasar turno / saltar / cambiar categoría? (solo quien pregunta)
+  function myTurn(g) {
+    if (mode === 'local') return true;
+    if (mode === 'host')  return !connected || g.spinner === 0;
+    return connected && g.spinner === 1;
+  }
+  // ¿Puedo elegir la respuesta de un momento especial? (solo quien responde)
+  function canReply(g) {
+    if (mode === 'local') return true;
+    if (mode === 'host')  return !connected || g.spinner === 1;
+    return connected && g.spinner === 0;
+  }
+
+  // Texto del momento especial, con el nombre de quien responde si lo hay
+  function spText(i, answerer) {
+    const n = rawName(answerer), t = SPECIALS[i].t;
+    return n ? `${n}, ${t}` : t[0].toUpperCase() + t.slice(1);
+  }
+  function spInfo(g) {
+    if (g.special == null || !SPECIALS[g.special]) return null;
+    const s = SPECIALS[g.special];
+    return { text: spText(g.special, 1 - g.spinner), a: s.a, b: s.b };
+  }
+
+  // Lo que se va a mostrar: en 'guest' viene del anfitrión; si no, de esta partida.
+  function view() {
+    if (mode === 'guest') {
+      const r = remote || { game: newGame(), q: null, sp: null, counts: {}, totals: {} };
+      return { g: r.game, q: r.q, sp: r.sp, counts: r.counts || {}, totals: r.totals || {} };
+    }
+    const g = S.game, counts = {}, totals = {};
+    Object.keys(CATS).forEach(k => { counts[k] = remainingOf(k).length; totals[k] = poolOf(k).length; });
+    return { g, q: getQ(g.current), sp: spInfo(g), counts, totals };
+  }
+
+  /* =====================================================================
+     8. PINTAR LA PANTALLA
+     ---------------------------------------------------------------------
+     render() actualiza todo lo visible según el estado actual. Se llama
+     después de cualquier cambio.
+     ===================================================================== */
+  function render() {
+    const { g, q, sp, counts, totals } = view();
+    const mine = myTurn(g);
+    const spinner = g.spinner, answerer = 1 - spinner;
+    const c0 = CATS[g.category] ? g.category : 'all';
+    const has = !!q || !!sp;
+    const cat = q ? catOf(q.c) : sp ? SP : CATS[c0];
+    const total = totals[c0] || 0, left = counts[c0] || 0;
+
+    document.documentElement.style.setProperty('--c', cat.color);
+    $('#count').textContent = `Restantes: ${left}/${total}`;
+    $('#barFill').style.width = total ? ((total - left) / total * 100) + '%' : '0%';
+    $('#footer').textContent = `Flowers 🌸 · ${allQs().length} preguntas listas`;
+    $('#savedCount').textContent = g.notes.length;
+    $('#who').hidden = mode !== 'local';
+    renderFilters(counts, mine);
+    renderPill();
+
+    // --- qué partes se ven ---
+    $('#notes').hidden       = !(q && mine);                       // solo quien pregunta anota
+    $('#cardActions').hidden = !q;
+    $('#btnSkip').hidden     = !mine;
+    $('#spReply').hidden     = !(sp && !g.spDone && canReply(g));  // solo quien responde elige
+    $('#spResult').hidden    = !(sp && g.spDone);
+    $('#waRow').hidden       = !(has && mine);
+    $('#turn').hidden        = !has;
+    $('#roleHint').hidden    = !has;
+
+    // --- contenido de la tarjeta ---
+    if (sp && !q) {
+      $('#badge').textContent = `${SP.emoji} ${SP.label}`;
+      $('#question').textContent = sp.text;
+      $('#btnYes').textContent = sp.a;
+      $('#btnMaybe').textContent = sp.b;
+      $('#spResult').textContent = `${NAME(answerer)} respondió: ${g.spAnswer}`;
+      $('#turn').textContent = `💌 Responde: ${LABEL(answerer)}`;
+      $('#roleHint').textContent = g.spDone
+        ? (mine ? 'Listo. Pasen el turno cuando quieran.' : 'Respuesta enviada 💌')
+        : (canReply(g) ? (mode === 'local' ? `Elige la respuesta de ${NAME(answerer)}.` : 'Elige tu respuesta.') : `Esperando la respuesta de ${NAME(answerer)}…`);
+    } else if (q) {
+      $('#badge').textContent = `${cat.emoji} ${cat.label}`;
+      $('#question').textContent = q.t;
+      $('#turn').textContent = `🎤 ${LABEL(spinner)} pregunta · ${LABEL(answerer)} responde`;
+      $('#roleHint').textContent = mine
+        ? `Léele la pregunta a ${NAME(answerer)} y anota lo que responda.`
+        : `Te toca responder. ${NAME(spinner)} anotará lo que quieras recordar.`;
+      $('#labelA').textContent = q.c === 'retos' ? '📝 Cómo les fue (opcional)' : `📝 Lo que respondió ${NAME(answerer)}`;
+      const fav = S.favs.some(f => f.id === q.id);
+      $('#btnFav').textContent = fav ? '★ Favorita' : '☆ Favorita';
+      $('#btnFav').classList.toggle('on', fav);
+    } else if (total && !left) {
+      $('#badge').textContent = '🎉 Mazo completado';
+      $('#question').textContent = 'Han respondido todas las preguntas de esta categoría. Pulsen “Reiniciar mazo” o cambien de categoría.';
+    } else {
+      $('#badge').textContent = `${CATS[c0].emoji} ${CATS[c0].label}`;
+      $('#question').textContent = mine
+        ? (mode === 'local'
+            ? `Turno de ${NAME(spinner)}: gira la ruleta y hazle la pregunta a ${NAME(answerer)}.`
+            : 'Es tu turno: gira la ruleta y hazle la pregunta a tu pareja.')
+        : `Turno de ${NAME(spinner)}. Esperen a que gire la ruleta…`;
+    }
+
+    // --- botón principal ---
+    const btn = $('#btnSpin');
+    if (guestWaiting)      { btn.textContent = '⏳ Enviando…';                                   btn.disabled = true; }
+    else if (has && mine)  { btn.textContent = `✅ Listo · pasar el turno a ${NAME(answerer)}`;  btn.disabled = false; }
+    else if (has)          { btn.textContent = '💬 Te toca responder';                            btn.disabled = true; }
+    else if (mine)         { btn.textContent = '🎰 Girar ruleta';                                 btn.disabled = !(total && left); }
+    else                   { btn.textContent = `⏳ Turno de ${NAME(spinner)}`;                    btn.disabled = true; }
+    if (busy) btn.disabled = true;
+  }
+
+  // Botones de categoría, con cuántas preguntas quedan en cada una
+  function renderFilters(counts, mine) {
+    const g = view().g;
+    $('#filters').replaceChildren(...Object.entries(CATS).map(([key, c]) => {
+      const b = h('button', {
+        class: 'chip' + (g.category === key ? ' active' : '') + (mine ? '' : ' dim'),
+        type: 'button',
+        onclick: () => act('cat', key)
+      }, `${c.emoji} ${c.label}`, h('small', {}, counts[key] ?? 0));
+      b.style.setProperty('--c', c.color);
+      return b;
+    }));
+  }
+
+  function renderPill() {
+    const p = $('#modePill');
+    p.className = 'pill';
+    if (mode === 'local') p.textContent = '📱 Un solo teléfono · toca para jugar online';
+    else if (connected) { p.textContent = `🌐 Online con ${NAME(1 - me())}`; p.classList.add('on'); }
+    else { p.textContent = '⚠️ Sin conexión · toca para reconectar'; p.classList.add('warn'); }
+  }
+
+  /* ---------- Animación de la ruleta ---------- */
+  function land() {
+    const el = $('#question');
+    el.classList.remove('land'); void el.offsetWidth; el.classList.add('land');
+  }
+
+  // Se llama después de cualquier cambio de estado (propio o recibido).
+  // prevSeq = el "seq" que había antes: si cambió, hay pregunta nueva → animar.
+  function present(prevSeq) {
+    if (busy) return;                       // la animación en curso mostrará lo último
+    const { g } = view();
+    const has = hasPlay(g);
+    if (!has) $('#noteA').value = '';
+    if (has && g.seq !== prevSeq) {
+      $('#noteA').value = '';
+      if (g.current == null) {              // momento especial: sin ruleta, solo aterriza
+        render(); land();
+        if (S.vibrate && navigator.vibrate) navigator.vibrate([30, 40, 30]);
+      } else roll();
+    } else render();
+  }
+
+  function roll() {
+    busy = true;
+    const qEl = $('#question');
+    qEl.classList.remove('land');
+    qEl.classList.add('rolling');
+    $('#badge').textContent = '🎰 Girando…';
+    ['#notes', '#cardActions', '#spReply', '#waRow', '#turn', '#roleHint', '#spResult'].forEach(s => { $(s).hidden = true; });
+    $('#btnSpin').disabled = true;
+    const pool = poolOf(view().g.category);
+    const ticker = reduced || !pool.length ? null : setInterval(() => {
+      qEl.textContent = pool[Math.floor(Math.random() * pool.length)].t;   // textos que pasan rápido
+    }, 85);
+    setTimeout(() => {
+      clearInterval(ticker);
+      busy = false;
+      qEl.classList.remove('rolling');
+      render(); land();
+      if (S.vibrate && navigator.vibrate) navigator.vibrate(18);
+    }, reduced ? 120 : 900);
+  }
+
+  /* =====================================================================
+     9. MECÁNICA DEL JUEGO (el "motor")
+     ---------------------------------------------------------------------
+     Estas funciones solo se ejecutan en 'local' y 'host'. Cuando eres
+     'guest', tus acciones viajan al anfitrión y él las ejecuta.
+     Acciones posibles (a):
+       'spin'  → girar: saca una pregunta (o un momento especial)
+       'skip'  → "otra pregunta": la actual vuelve al mazo y sale otra
+       'pass'  → listo: guarda la nota y el turno pasa a la otra persona
+       'cat'   → cambiar de categoría (v = clave de categoría)
+       'reply' → elegir respuesta del momento especial (v = 'a' o 'b')
+     ===================================================================== */
+  function commitNote(text) {
+    const g = S.game, q = getQ(g.current);
+    if (!q || !text) return;
+    g.notes.unshift({ id: uid(), qid: q.id, q: q.t, c: q.c, a: text, an: NAME(1 - g.spinner), ts: Date.now() });
+  }
+
+  function pickQuestion(excludeId) {
+    const g = S.game;
+    let rem = remainingOf(g.category).filter(q => q.id !== excludeId);
+    if (!rem.length && excludeId && remainingOf(g.category).some(q => q.id === excludeId)) rem = remainingOf(g.category);
+    if (!rem.length) { g.current = null; return; }
+    const pick = rem[Math.floor(Math.random() * rem.length)];   // ← elección al azar
+    g.used.push(pick.id);                                        // ← "ya salió": desaparece del mazo
+    g.current = pick.id;
+    g.since++;
+    g.seq++;
+  }
+
+  function engSpin(excludeId) {
+    const g = S.game;
+    if (S.specials && g.since >= 3 && excludeId == null) {       // toca un momento especial
+      g.special = g.spIdx % SPECIALS.length;
+      g.spIdx++; g.since = 0; g.current = null; g.spDone = false; g.spAnswer = ''; g.seq++;
+      return;
+    }
+    g.special = null;
+    pickQuestion(excludeId);
+  }
+
+  function eng(a, v, note) {
+    const g = S.game;
+    if (a === 'spin') {
+      if (hasPlay(g)) return;
+      engSpin(null);
+    } else if (a === 'skip') {
+      if (!g.current) return;
+      commitNote(note);
+      const id = g.current;
+      g.used = g.used.filter(x => x !== id);   // vuelve al mazo para más tarde
+      g.since = Math.max(0, g.since - 1);
+      g.current = null;
+      engSpin(id);
+    } else if (a === 'pass') {
+      if (!hasPlay(g)) return;
+      commitNote(note);
+      g.current = null; g.special = null; g.spDone = false; g.spAnswer = '';
+      g.spinner = 1 - g.spinner;               // ← los papeles se intercambian
+    } else if (a === 'cat') {
+      if (!CATS[v]) return;
+      commitNote(note);
+      g.category = v; g.current = null; g.special = null; g.spDone = false;
+    } else if (a === 'reply') {
+      if (g.special == null || g.spDone || (v !== 'a' && v !== 'b')) return;
+      const s = SPECIALS[g.special], answerer = 1 - g.spinner;
+      g.notes.unshift({ id: uid(), q: spText(g.special, answerer), c: 'especial', a: s[v], an: NAME(answerer), ts: Date.now() });
+      g.spDone = true; g.spAnswer = s[v];
+    }
+  }
+
+  function readNote() { return $('#notes').hidden ? '' : $('#noteA').value.trim().slice(0, 500); }
+
+  function afterChange(prev) { save(); if (mode === 'host') pushState(); present(prev); }
+
+  // Punto de entrada de TODAS las acciones del jugador (botones de la pantalla)
+  function act(a, v) {
+    if (busy) return;
+    const { g } = view();
+    const allowed = a === 'reply' ? canReply(g) : myTurn(g);
+    if (!allowed) return toast(mode !== 'local' && !connected ? 'Sin conexión' : 'No es tu turno');
+    const note = (a === 'spin' || a === 'reply') ? '' : readNote();
+
+    if (mode === 'guest') {                      // el anfitrión ejecuta y nos devuelve el estado
+      send({ k: 'act', a, v, note });
+      guestWaiting = true; render();
+      setTimeout(() => { if (guestWaiting) { guestWaiting = false; render(); } }, 5000);
+      return;
+    }
+    const prev = S.game.seq;
+    eng(a, v, note);
+    afterChange(prev);
+  }
+
+  function resetDeck() {
+    if (mode === 'guest') return toast('Solo quien creó la sala puede reiniciar el mazo');
+    if (busy) return;
+    const g = S.game, ids = new Set(poolOf(g.category).map(q => q.id));
+    g.used = g.used.filter(id => !ids.has(id));
+    g.current = null; g.special = null; g.since = 0; g.spDone = false;
+    afterChange(g.seq);
+    toast('Mazo reiniciado');
+  }
+
+  function toggleFav() {
+    const q = view().q; if (!q) return;
+    S.favs = S.favs.some(f => f.id === q.id) ? S.favs.filter(f => f.id !== q.id) : S.favs.concat({ id: q.id, c: q.c, t: q.t });
+    save(); render();
+  }
+
+  /* =====================================================================
+     10. VENTANA DE RECUERDOS (Respuestas / Favoritas / Vistas)
+     ===================================================================== */
+  let tab = 'notes';
+
+  function renderHistory() {
+    const list = $('#histList');
+    const { g } = view();
+    const canEdit = mode !== 'guest';
+    ['notes', 'favs', 'seen'].forEach(t => $('#tab' + t[0].toUpperCase() + t.slice(1)).classList.toggle('active', tab === t));
+    $('#histFoot').hidden = tab !== 'notes';
+    $('#btnClear').hidden = !canEdit;
+
+    if (tab === 'notes') {
+      if (!g.notes.length) return list.replaceChildren(h('p', { class: 'empty' }, 'Aún no hay respuestas guardadas. Cuando quien pregunta anote algo y pase el turno, aparecerá aquí.'));
+      list.replaceChildren(...g.notes.map(n => {
+        const c = catOf(n.c);
+        const el = h('div', { class: 'entry' },
+          h('div', { class: 'entry-top' },
+            h('span', {}, `${c.emoji} ${c.label}`), h('span', { class: 'sp' }), h('span', {}, fmt(n.ts)),
+            canEdit ? h('button', { class: 'x', type: 'button', 'aria-label': 'Eliminar nota', onclick: () => delNote(n.id) }, '✕') : null),
+          h('p', { class: 'entry-q' }, n.q),
+          n.a ? h('p', { class: 'entry-a' }, h('b', {}, (n.an || 'Respuesta') + ': '), n.a) : null,
+          n.b ? h('p', { class: 'entry-a' }, h('b', {}, (n.bn || 'Respuesta') + ': '), n.b) : null);   // (notas de la versión anterior)
+        el.style.setProperty('--c', c.color);
+        return el;
+      }));
+    } else if (tab === 'favs') {
+      if (!S.favs.length) return list.replaceChildren(h('p', { class: 'empty' }, 'Marquen con ☆ las preguntas que quieran repetir en otra cita.'));
+      list.replaceChildren(...S.favs.map(q => {
+        const c = catOf(q.c);
+        const el = h('div', { class: 'entry' },
+          h('div', { class: 'entry-top' }, h('span', {}, `${c.emoji} ${c.label}`), h('span', { class: 'sp' }),
+            h('button', { class: 'x', type: 'button', title: 'Enviar por WhatsApp', onclick: () => sendWA(qMsg(q)) }, '📲'),
+            h('button', { class: 'x', type: 'button', 'aria-label': 'Quitar de favoritas', onclick: () => { S.favs = S.favs.filter(f => f.id !== q.id); save(); render(); renderHistory(); } }, '✕')),
+          h('p', { class: 'entry-q' }, q.t));
+        el.style.setProperty('--c', c.color);
+        return el;
+      }));
+    } else {
+      // Preguntas que ya salieron en esta partida (la más reciente arriba)
+      const seen = g.used.slice().reverse().map(id => (getQ(id) || (view().q && view().q.id === id ? view().q : null))).filter(Boolean);
+      if (!seen.length) return list.replaceChildren(h('p', { class: 'empty' }, 'Todavía no ha salido ninguna pregunta en esta partida.'));
+      list.replaceChildren(h('p', { class: 'empty', style: 'padding:0 0 4px' }, `${g.used.length} preguntas ya salieron y no se repetirán.`),
+        ...seen.map(q => {
+          const c = catOf(q.c);
+          const el = h('div', { class: 'entry' }, h('div', { class: 'entry-top' }, h('span', {}, `${c.emoji} ${c.label}`)), h('p', { class: 'entry-q' }, q.t));
+          el.style.setProperty('--c', c.color);
+          return el;
+        }));
+    }
+  }
+
+  function delNote(id) {
+    S.game.notes = S.game.notes.filter(n => n.id !== id);
+    save(); if (mode === 'host') pushState(); render(); renderHistory();
+  }
+
+  async function clearNotes() {
+    if (mode === 'guest' || !S.game.notes.length) return;
+    if (await ask('¿Borrar todas las respuestas anotadas de esta partida? No se puede deshacer.', 'Borrar notas')) {
+      S.game.notes = []; save(); if (mode === 'host') pushState(); render(); renderHistory();
+      toast('Notas borradas');
+    }
+  }
+
+  const notesText = () => {
+    const { g } = view();
+    return `Flowers 🌸 · ${new Date().toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' })}\n` +
+      g.notes.slice().reverse().map(n =>
+        `\n[${catOf(n.c).label}] ${n.q}` + (n.a ? `\n  ${n.an || 'Respuesta'}: ${n.a}` : '') + (n.b ? `\n  ${n.bn || 'Respuesta'}: ${n.b}` : '')
+      ).join('\n');
+  };
+  const copyNotes = () => view().g.notes.length ? copyText(notesText(), '📋 Notas copiadas') : toast('No hay notas para copiar');
+
+  /* ---------- WhatsApp ---------- */
+  // Abre wa.me con el texto listo; si el navegador bloquea la ventana, copia el texto para pegarlo.
+  function sendWA(text) {
+    let w = null;
+    try { w = window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); if (w) w.opener = null; } catch {}
+    if (!w) copyText(text, 'Texto copiado 📋 Pégalo en WhatsApp');
+  }
+  const qMsg = q => {
+    const g = view().g, n = rawName(1 - g.spinner), c = catOf(q.c);
+    return `${n ? `Hola ${n} 🌸` : '🌸 Flowers'}\n\n*${c.emoji} ${c.label}*\n${q.t}\n\n¿Me respondes? 😊`;
+  };
+  function shareCurrent() {
+    const { q, sp } = view();
+    if (q) sendWA(qMsg(q)); else if (sp) sendWA(`💌 ${sp.text}`);
+  }
+  const shareNotes = () => view().g.notes.length ? sendWA(notesText()) : toast('No hay notas para enviar');
+
+  /* =====================================================================
+     11. PARTIDAS GUARDADAS
+     ---------------------------------------------------------------------
+     Una "partida" es una copia (foto) de S.game: preguntas vistas,
+     categoría, notas y turno. Se puede guardar con un nombre, actualizar,
+     cargar más tarde o borrar. Además, la partida actual SIEMPRE se
+     guarda sola: si cierras la página y vuelves, sigues donde lo dejaste.
+     (En modo online solo quien creó la sala maneja las partidas.)
+     ===================================================================== */
+  const defaultGameName = () => 'Cita ' + new Date().toLocaleDateString('es', { day: 'numeric', month: 'short' });
+
+  function openGames() {
+    if (mode === 'guest') return toast('Las partidas las maneja quien creó la sala');
+    $('#gameName').value = defaultGameName();
+    renderGames();
+    $('#dlgGames').showModal();
+  }
+
+  function renderGames() {
+    const box = $('#gamesList');
+    if (!S.saves.length) return box.replaceChildren(h('p', { class: 'empty', style: 'padding:8px 0' }, 'Aún no hay partidas guardadas.'));
+    box.replaceChildren(...S.saves.map(s => h('div', { class: 'entry', style: '--c:#8b5cf6' },
+      h('div', { class: 'entry-top' }, h('span', {}, fmt(s.ts)), h('span', { class: 'sp' }),
+        h('button', { class: 'x', type: 'button', 'aria-label': 'Borrar partida', onclick: () => deleteGame(s.id) }, '✕')),
+      h('p', { class: 'entry-q' }, s.name),
+      h('p', { class: 'entry-a' }, `${s.game.used.length} preguntas vistas · ${s.game.notes.length} notas`),
+      h('div', { class: 'entry-actions' },
+        h('button', { class: 'btn-sub', type: 'button', onclick: () => loadGame(s.id) }, '▶ Cargar'),
+        h('button', { class: 'btn-sub', type: 'button', onclick: () => updateGame(s.id) }, '🔄 Actualizar')))));
+  }
+
+  function saveGame() {
+    S.saves.unshift({ id: uid(), name: $('#gameName').value.trim() || defaultGameName(), ts: Date.now(), game: clone(S.game) });
+    save(); renderGames(); toast('💾 Partida guardada');
+  }
+
+  async function updateGame(id) {
+    const s = S.saves.find(x => x.id === id); if (!s) return;
+    if (!await ask(`¿Reemplazar “${s.name}” con la partida actual?`, 'Reemplazar')) return;
+    s.game = clone(S.game); s.ts = Date.now();
+    save(); renderGames(); toast('Partida actualizada');
+  }
+
+  async function loadGame(id) {
+    const s = S.saves.find(x => x.id === id); if (!s) return;
+    if (!await ask(`Cargar “${s.name}” reemplazará la partida actual. Si quieres conservarla, guárdala antes.`, 'Cargar')) return;
+    S.game = Object.assign(newGame(), clone(s.game));
+    if (!CATS[S.game.category]) S.game.category = 'all';
+    S.game.seq = (S.game.seq || 0) + 1;
+    $('#noteA').value = '';
+    save(); if (mode === 'host') pushState(); render();
+    $('#dlgGames').close(); toast('Partida cargada');
+  }
+
+  async function deleteGame(id) {
+    const s = S.saves.find(x => x.id === id); if (!s) return;
+    if (!await ask(`¿Borrar la partida “${s.name}”?`, 'Borrar')) return;
+    S.saves = S.saves.filter(x => x.id !== id);
+    save(); renderGames();
+  }
+
+  async function startNewGame() {
+    if (!await ask('Se borrarán las preguntas vistas y las notas de la partida actual (las partidas ya guardadas no se tocan). ¿Empezar de cero?', 'Empezar de cero')) return;
+    S.game = newGame(S.game.category);
+    S.game.seq = 1000 + Math.floor(Math.random() * 1000);
+    $('#noteA').value = '';
+    save(); if (mode === 'host') pushState(); render();
+    $('#dlgGames').close(); toast('Partida nueva');
+  }
+
+  /* =====================================================================
+     12. AJUSTES Y PREGUNTAS PROPIAS
+     ===================================================================== */
+  function openSettings() {
+    $('#optSpecial').checked = S.specials; $('#optVibrate').checked = S.vibrate;
+    $('#customCat').replaceChildren(...Object.entries(CATS).filter(([k]) => k !== 'all')
+      .map(([k, c]) => h('option', { value: k }, `${c.emoji} ${c.label}`)));
+    renderCustom();
+    $('#dlgSettings').showModal();
+  }
+
+  function renderCustom() {
+    $('#customList').replaceChildren(...S.custom.map(q => {
+      const c = catOf(q.c);
+      return h('div', { class: 'entry', style: `--c:${c.color}` },
+        h('div', { class: 'entry-top' }, h('span', {}, `${c.emoji} ${c.label}`), h('span', { class: 'sp' }),
+          h('button', { class: 'x', type: 'button', 'aria-label': 'Eliminar pregunta', onclick: () => delCustom(q.id) }, '✕')),
+        h('p', { class: 'entry-q' }, q.t));
+    }));
+  }
+
+  function addCustom() {
+    const t = $('#customText').value.trim();
+    if (t.length < 5) return toast('Escribe una pregunta un poco más larga');
+    S.custom.push({ id: 'u' + uid(), c: $('#customCat').value, t });
+    $('#customText').value = '';
+    save(); if (mode === 'host') pushState(); render(); renderCustom();
+    toast('Pregunta añadida al mazo');
+  }
+
+  function delCustom(id) {
+    S.custom = S.custom.filter(q => q.id !== id);
+    S.game.used = S.game.used.filter(x => x !== id);
+    S.favs = S.favs.filter(f => f.id !== id);
+    if (S.game.current === id) S.game.current = null;
+    save(); if (mode === 'host') pushState(); render(); renderCustom();
+  }
+
+  /* =====================================================================
+     13. MODO ONLINE (2 personas, cada una en su teléfono)
+     ---------------------------------------------------------------------
+     Cómo funciona, en simple:
+       • Usa WebRTC: los dos teléfonos se conectan DIRECTAMENTE entre sí.
+         No hay servidor propio, ni cuentas, ni base de datos. Lo que
+         escriben viaja solo entre los dos.
+       • Para conectarse hay que intercambiar dos códigos (uno de ida y
+         otro de vuelta) por WhatsApp, SMS, etc. Solo se hace una vez por
+         sesión.
+       • Quien CREA la sala (host) lleva la partida y manda el estado a la
+         otra persona (guest). El guest envía sus acciones al host.
+       • Solo se usan servidores públicos de Google/Cloudflare (STUN) para
+         que los teléfonos se "encuentren" a través de internet. Por ellos
+         NO pasa ningún dato del juego.
+       • Limitación: en algunas redes móviles muy restrictivas la conexión
+         directa puede fallar. Si pasa, prueben con otra red WiFi o usen
+         el modo "un solo teléfono".
+
+     Mensajes que viajan por el canal (JSON):
+       { k:'hello', name }              → "hola, me llamo…"
+       { k:'state', s:{…} }             → (host → guest) estado completo
+       { k:'act', a, v, note }          → (guest → host) una acción
+     ===================================================================== */
+  const ICE = { iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' }
+  ] };
+  let pc = null, dc = null, pairRole = null, pairView = 'none';   // pairView: 'none' | 'host' | 'join'
+  const ACTIONS = ['spin', 'skip', 'pass', 'cat', 'reply'];
+
+  /* ---------- Códigos de conexión (texto corto para copiar y pegar) ---------- */
+  const toB64u = bytes => { let s = ''; bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const fromB64u = str => { const b = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+  async function pipeBytes(bytes, stream) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer()); }
+
+  // La descripción de conexión (SDP) se comprime para que el código sea más corto.
+  async function encodeDesc(d) {
+    const bytes = new TextEncoder().encode(JSON.stringify({ t: d.type, s: d.sdp }));
+    if ('CompressionStream' in window) return 'CC1z' + toB64u(await pipeBytes(bytes, new CompressionStream('deflate-raw')));
+    return 'CC1p' + toB64u(bytes);
+  }
+  async function decodeDesc(raw) {
+    const m = String(raw || '').match(/CC1[zp][A-Za-z0-9_-]+/);      // tolera texto extra alrededor del código
+    if (!m) throw new Error('Ese no parece un código de Flowers');
+    const mode = m[0][3], bytes = fromB64u(m[0].slice(4));
+    let out = bytes;
+    if (mode === 'z') {
+      if (!('DecompressionStream' in window)) throw new Error('Tu navegador no puede leer este código');
+      out = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+    }
+    const o = JSON.parse(new TextDecoder().decode(out));
+    return { type: o.t, sdp: o.s };
+  }
+
+  /* ---------- Conexión ---------- */
+  function closePeer() {
+    if (dc) { dc.onclose = null; dc.onmessage = null; try { dc.close(); } catch {} }
+    if (pc) { pc.onconnectionstatechange = null; try { pc.close(); } catch {} }
+    dc = pc = null;
+  }
+
+  function newPeer() {
+    closePeer();
+    pc = new RTCPeerConnection(ICE);
+    pc.onconnectionstatechange = () => {
+      const st = pc && pc.connectionState;
+      if (st === 'failed' || st === 'closed') onDisconnected();
+      else if (st === 'disconnected') { renderPill(); }
+    };
+    return pc;
+  }
+
+  function attachChannel(ch) {
+    dc = ch;
+    const open = () => { if (ch._opened) return; ch._opened = true; onChannelOpen(); };
+    ch.onopen = open;
+    ch.onclose = () => onDisconnected();
+    ch.onmessage = e => onMessage(e.data);
+    if (ch.readyState === 'open') open();          // algunos navegadores lo entregan ya abierto
+  }
+
+  // Espera a que el navegador termine de reunir sus "direcciones" (máx. 4.5 s)
+  function waitIce(peer, ms = 4500) {
+    return new Promise(res => {
+      if (peer.iceGatheringState === 'complete') return res();
+      const done = () => { peer.removeEventListener('icegatheringstatechange', chk); clearTimeout(t); res(); };
+      const chk = () => { if (peer.iceGatheringState === 'complete') done(); };
+      peer.addEventListener('icegatheringstatechange', chk);
+      const t = setTimeout(done, ms);
+    });
+  }
+
+  const rtcOk = () => { if (!window.RTCPeerConnection) { toast('Este navegador no soporta el modo online'); return false; } return true; };
+
+  // PASO A (quien crea la sala): generar el código de invitación
+  async function hostCreate() {
+    if (!rtcOk()) return;
+    S.myName = $('#myName').value.trim(); save();
+    pairView = 'host'; pairRole = 'host'; syncNetUI();
+    $('#offerOut').value = ''; $('#answerIn').value = '';
+    try {
+      const peer = newPeer();
+      attachChannel(peer.createDataChannel('flowers'));
+      await peer.setLocalDescription(await peer.createOffer());
+      await waitIce(peer);
+      $('#offerOut').value = await encodeDesc(peer.localDescription);
+    } catch (e) { toast('No se pudo crear la sala: ' + (e.message || e)); }
+  }
+
+  // PASO B (quien se une): pegar la invitación y generar el código de respuesta
+  async function guestAnswer() {
+    if (!rtcOk()) return;
+    S.myName = $('#myName').value.trim(); save();
+    const btn = $('#btnMakeAnswer'); btn.disabled = true;
+    try {
+      const desc = await decodeDesc($('#offerIn').value);
+      if (desc.type !== 'offer') throw new Error('Ese es un código de respuesta; aquí va el de invitación');
+      pairRole = 'guest';
+      const peer = newPeer();
+      peer.ondatachannel = e => attachChannel(e.channel);
+      await peer.setRemoteDescription(desc);
+      await peer.setLocalDescription(await peer.createAnswer());
+      await waitIce(peer);
+      $('#answerOut').value = await encodeDesc(peer.localDescription);
+      toast('✅ Listo: envía tu código de respuesta');
+    } catch (e) { toast(e.message || 'Código no válido'); }
+    btn.disabled = false;
+  }
+
+  // PASO C (quien creó la sala): pegar el código de respuesta y conectar
+  async function hostConnect() {
+    try {
+      if (!pc || pairRole !== 'host') throw new Error('Primero genera el código de invitación');
+      const desc = await decodeDesc($('#answerIn').value);
+      if (desc.type !== 'answer') throw new Error('Ese es un código de invitación; aquí va el de respuesta');
+      await pc.setRemoteDescription(desc);
+      toast('Conectando…');
+    } catch (e) { toast(e.message || 'Código no válido'); }
+  }
+
+  function onChannelOpen() {
+    connected = true; mode = pairRole; remote = null; guestWaiting = false; pairView = 'none';
+    send({ k: 'hello', name: S.myName });
+    if (mode === 'host') pushState();
+    if ($('#dlgMode').open) $('#dlgMode').close();
+    toast('✅ ¡Conectados!');
+    syncNetUI(); render();
+  }
+
+  function onDisconnected() {
+    if (!connected) return;
+    connected = false; guestWaiting = false;
+    toast('⚠️ Se perdió la conexión');
+    syncNetUI(); render();
+  }
+
+  function leaveOnline() {
+    closePeer();
+    mode = 'local'; connected = false; remote = null; peerName = ''; pairRole = null; pairView = 'none'; guestWaiting = false;
+    ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
+    syncNetUI(); render();
+  }
+
+  /* ---------- Mensajes ---------- */
+  function send(o) { try { if (dc && dc.readyState === 'open') dc.send(JSON.stringify(o)); } catch { /* se ignora */ } }
+
+  // (host) Foto del estado para la otra persona
+  function snapshot() {
+    const { g, q, sp, counts, totals } = view();
+    return {
+      game: { used: g.used, current: g.current, spinner: g.spinner, category: g.category, notes: g.notes,
+              since: g.since, special: g.special, spDone: g.spDone, spAnswer: g.spAnswer, seq: g.seq },
+      q: q ? { id: q.id, c: q.c, t: q.t } : null,
+      sp, counts, totals,
+      names: [rawName(0), rawName(1)]
+    };
+  }
+  function pushState() { if (mode === 'host' && connected) send({ k: 'state', s: snapshot() }); }
+
+  function onMessage(raw) {
+    let m; try { m = JSON.parse(raw); } catch { return; }
+    if (!m || typeof m !== 'object') return;
+
+    if (m.k === 'hello') {
+      peerName = String(m.name || '').slice(0, 20);
+      if (mode === 'host') pushState();
+      render();
+    } else if (m.k === 'state' && mode === 'guest') {
+      if (!m.s || !m.s.game || !Array.isArray(m.s.game.notes) || !Array.isArray(m.s.game.used)) return;
+      const prev = remote && remote.game ? remote.game.seq : undefined;
+      remote = m.s; guestWaiting = false;
+      present(prev);
+    } else if (m.k === 'act' && mode === 'host') {
+      if (!ACTIONS.includes(m.a)) return;
+      const g = S.game;
+      const ok = m.a === 'reply' ? g.spinner === 0 : g.spinner === 1;   // ¿le correspondía hacerlo?
+      if (!ok) { pushState(); return; }
+      const prev = g.seq;
+      eng(m.a, m.v, String(m.note || '').slice(0, 500));
+      afterChange(prev);
+    }
+  }
+
+  /* ---------- Ventana de modo ---------- */
+  function openMode() {
+    $('#myName').value = S.myName;
+    syncNetUI();
+    $('#dlgMode').showModal();
+  }
+
+  function syncNetUI() {
+    const st = $('#netStatus');
+    if (mode !== 'local' && connected) st.textContent = `✅ Conectado con ${NAME(1 - me())}. ${mode === 'host' ? 'Tú creaste la sala.' : 'Te uniste a la sala.'}`;
+    else if (mode !== 'local') st.textContent = '⚠️ Sin conexión. Crea o únete a una sala para reconectar, o vuelve a un solo teléfono.';
+    else if (pairView !== 'none') st.textContent = '⏳ Conectando… completa los pasos de abajo.';
+    else st.textContent = '📱 Ahora: un solo teléfono.';
+    $('#pairHost').hidden = !(pairView === 'host' && !connected);
+    $('#pairJoin').hidden = !(pairView === 'join' && !connected);
+    $('#onlineChoices').hidden = connected;
+    $('#btnModeLocal').textContent = (mode !== 'local' || pairView !== 'none') ? '📱 Volver a un solo teléfono' : '📱 Usar un solo teléfono';
+    $('#btnShareOffer').hidden = $('#btnShareAnswer').hidden = !navigator.share;
+    renderPill();
+  }
+
+  async function shareCode(text) {
+    const msg = '🌸 Flowers · código para jugar online:\n' + text;
+    try { await navigator.share({ text: msg }); } catch { /* cancelado */ }
+  }
+
+  /* =====================================================================
+     14. CONEXIÓN DE BOTONES (eventos)
+     ===================================================================== */
+  $('#btnSpin').addEventListener('click', () => { const { g } = view(); act(hasPlay(g) ? 'pass' : 'spin'); });
+  $('#btnSkip').addEventListener('click', () => act('skip'));
+  $('#btnYes').addEventListener('click', () => act('reply', 'a'));
+  $('#btnMaybe').addEventListener('click', () => act('reply', 'b'));
+  $('#btnFav').addEventListener('click', toggleFav);
+  $('#btnReset').addEventListener('click', resetDeck);
+  $('#btnWA').addEventListener('click', shareCurrent);
+  $('#btnHistory').addEventListener('click', () => { renderHistory(); $('#dlgHistory').showModal(); });
+  $('#btnGames').addEventListener('click', openGames);
+  $('#btnSettings').addEventListener('click', openSettings);
+  $('#btnMode').addEventListener('click', openMode);
+  $('#modePill').addEventListener('click', openMode);
+  $('#btnCopy').addEventListener('click', copyNotes);
+  $('#btnWAnotes').addEventListener('click', shareNotes);
+  $('#btnClear').addEventListener('click', clearNotes);
+  $('#btnSaveGame').addEventListener('click', saveGame);
+  $('#btnNewGame').addEventListener('click', startNewGame);
+  $('#btnAddCustom').addEventListener('click', addCustom);
+  $('#customText').addEventListener('keydown', e => { if (e.key === 'Enter') addCustom(); });
+  $('#tabNotes').addEventListener('click', () => { tab = 'notes'; renderHistory(); });
+  $('#tabFavs').addEventListener('click', () => { tab = 'favs'; renderHistory(); });
+  $('#tabSeen').addEventListener('click', () => { tab = 'seen'; renderHistory(); });
+
+  // Modo de juego / online
+  $('#btnModeLocal').addEventListener('click', () => { leaveOnline(); toast('📱 Modo un solo teléfono'); $('#dlgMode').close(); });
+  $('#btnHost').addEventListener('click', hostCreate);
+  $('#btnJoin').addEventListener('click', () => { S.myName = $('#myName').value.trim(); save(); pairView = 'join'; syncNetUI(); });
+  $('#btnConnect').addEventListener('click', hostConnect);
+  $('#btnMakeAnswer').addEventListener('click', guestAnswer);
+  $('#btnCopyOffer').addEventListener('click', () => $('#offerOut').value ? copyText($('#offerOut').value, '📋 Código copiado') : toast('Aún se está generando el código'));
+  $('#btnCopyAnswer').addEventListener('click', () => $('#answerOut').value ? copyText($('#answerOut').value, '📋 Código copiado') : toast('Primero genera tu respuesta'));
+  $('#btnShareOffer').addEventListener('click', () => $('#offerOut').value && shareCode($('#offerOut').value));
+  $('#btnShareAnswer').addEventListener('click', () => $('#answerOut').value && shareCode($('#answerOut').value));
+  ['#offerOut', '#answerOut'].forEach(s => $(s).addEventListener('focus', e => e.target.select()));
+  $('#myName').addEventListener('input', e => {
+    S.myName = e.target.value; save();
+    if (connected) { send({ k: 'hello', name: S.myName }); if (mode === 'host') pushState(); }
+    render();
+  });
+
+  // Nombres (un solo teléfono)
+  $('#quickA').addEventListener('input', e => { S.names.a = e.target.value; save(); render(); });
+  $('#quickB').addEventListener('input', e => { S.names.b = e.target.value; save(); render(); });
+
+  // Opciones
+  $('#optSpecial').addEventListener('change', e => { S.specials = e.target.checked; save(); });
+  $('#optVibrate').addEventListener('change', e => { S.vibrate = e.target.checked; save(); });
+
+  // Cerrar las ventanas con ✕ o tocando fuera de ellas
+  document.querySelectorAll('dialog').forEach(d => {
+    d.addEventListener('click', e => { if (e.target === d) d.close(); });
+    d.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => d.close()));
+  });
+
+  /* =====================================================================
+     15. INICIO
+     ===================================================================== */
+  $('#quickA').value = S.names.a;
+  $('#quickB').value = S.names.b;
+  syncNetUI();
+  render();
+  console.log(`Flowers 🌸: ${DEFAULTS.length} preguntas cargadas.`);
+})();
+</script>
+</body>
+</html>
