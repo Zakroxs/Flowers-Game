@@ -1448,6 +1448,7 @@
   ] };
   let pc = null, dc = null, pairRole = null, pairView = 'none';   // pairView: 'none' | 'host' | 'join'
   let watchdog = null;                                             // avisa si la conexión tarda demasiado
+  let lastConnectError = '';                                       // se muestra en la ventana aunque el aviso ya se haya desvanecido
   const ACTIONS = ['spin', 'skip', 'pass', 'cat', 'reply'];
 
   /* ---------- Códigos de conexión (texto corto para copiar y pegar) ---------- */
@@ -1494,10 +1495,15 @@
     // Traduce el estado técnico de la conexión a un mensaje que SIEMPRE
     // se ve en pantalla (no solo un aviso que desaparece a los segundos),
     // para que nunca parezca que "no pasa nada" mientras conecta o falla.
+    // Se usa iceConnectionState (no solo connectionState) porque es el
+    // que más navegadores reportan de forma confiable.
     pc.oniceconnectionstatechange = () => {
+      const s = pc && pc.iceConnectionState;
       const t = { checking: '🔎 Buscando la mejor ruta de conexión…', connected: '✅ ¡Conectado!', completed: '✅ ¡Conectado!',
-                  disconnected: '⚠️ Conexión inestable…', failed: '❌ No se pudo conectar (revisa si tienes una VPN activa y pruébalo sin ella)' }[pc.iceConnectionState];
+                  disconnected: '⚠️ Conexión inestable…',
+                  failed: '❌ Error de enlace: no se pudo conectar (revisa si alguno tiene VPN activa y pruébenlo sin ella)' }[s];
       if (t) setPairStatus(t);
+      if (s === 'failed') onConnectFailed();
     };
     return pc;
   }
@@ -1509,12 +1515,18 @@
     if (id) $(id).textContent = msg;
   }
 
-  // Si tras 25s de iniciar el emparejamiento nadie logró conectar, se avisa
-  // en vez de dejar la ventana "Conectando…" para siempre sin explicación.
+  // Vigila que el emparejamiento SIEMPRE termine en algo visible:
+  //  · a los 25s, un aviso de que está tardando (por si sigue intentando)
+  //  · a los 45s, un ERROR DE ENLACE definitivo si aún no conectó, aunque
+  //    el navegador nunca haya avisado por su cuenta que falló (pasa en
+  //    algunos navegadores, que se quedan "buscando" sin fin).
   function armWatchdog() {
     clearWatchdog();
     watchdog = setTimeout(() => {
-      if (!connected) { const m = '⏳ Está tardando más de lo normal. Revisen que ambos tengan internet activo y, si usan VPN, pruébenlo sin ella.'; toast(m); setPairStatus(m); }
+      if (connected) return;
+      const m = '⏳ Está tardando más de lo normal. Revisen que ambos tengan internet activo y, si usan VPN, pruébenlo sin ella.';
+      toast(m); setPairStatus(m);
+      watchdog = setTimeout(() => { if (!connected) onConnectFailed(); }, 20000);
     }, 25000);
   }
   function clearWatchdog() { if (watchdog) { clearTimeout(watchdog); watchdog = null; } }
@@ -1527,8 +1539,11 @@
     const wasConnected = connected;
     closePeer();
     mode = 'local'; connected = false; remote = null; guestWaiting = false;
-    if (wasConnected) toast('⚠️ Se perdió la conexión. Vuelvan a crear o unirse a una sala para reconectar.');
-    else toast('❌ No se pudo conectar. Verifiquen que ambos códigos se copiaron completos, o prueben con otra red (y sin VPN).');
+    const msg = wasConnected
+      ? '⚠️ Se perdió la conexión. Vuelvan a crear o unirse a una sala para reconectar.'
+      : '❌ Error de enlace: no se logró conectar. Generen códigos nuevos y verifiquen que ambos tengan internet (y sin VPN).';
+    toast(msg);
+    lastConnectError = msg;
     pairRole = null; pairView = 'none';
     ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
     syncNetUI(); render();
@@ -1561,6 +1576,7 @@
   // PASO A (quien crea la sala): generar el código de invitación
   async function hostCreate() {
     if (!rtcOk()) return;
+    lastConnectError = '';
     S.myName = $('#myName').value.trim(); save();
     pairView = 'host'; pairRole = 'host'; syncNetUI();
     $('#offerOut').value = ''; $('#answerIn').value = ''; $('#pairHostStatus').textContent = '⏳ Generando tu código…';
@@ -1578,6 +1594,7 @@
   // PASO B (quien se une): pegar la invitación y generar el código de respuesta
   async function guestAnswer() {
     if (!rtcOk()) return;
+    lastConnectError = '';
     S.myName = $('#myName').value.trim(); save();
     const btn = $('#btnMakeAnswer'); btn.disabled = true;
     $('#pairJoinStatus').textContent = '⏳ Generando tu respuesta…';
@@ -1616,7 +1633,7 @@
 
   function onChannelOpen() {
     clearWatchdog();
-    connected = true; mode = pairRole; remote = null; guestWaiting = false; pairView = 'none';
+    connected = true; mode = pairRole; remote = null; guestWaiting = false; pairView = 'none'; lastConnectError = '';
     send({ k: 'hello', name: S.myName });
     if (mode === 'host') pushState();
     if ($('#dlgMode').open) $('#dlgMode').close();
@@ -1635,7 +1652,7 @@
   function leaveOnline() {
     clearWatchdog();
     closePeer();
-    mode = 'local'; connected = false; remote = null; peerName = ''; pairRole = null; pairView = 'none'; guestWaiting = false;
+    mode = 'local'; connected = false; remote = null; peerName = ''; pairRole = null; pairView = 'none'; guestWaiting = false; lastConnectError = '';
     ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
     ['#pairHostStatus', '#pairJoinStatus'].forEach(s => { $(s).textContent = ''; });
     syncNetUI(); render();
@@ -1693,6 +1710,7 @@
     if (mode !== 'local' && connected) st.textContent = `✅ Conectado con ${NAME(1 - me())}. ${mode === 'host' ? 'Tú creaste la sala.' : 'Te uniste a la sala.'}`;
     else if (mode !== 'local') st.textContent = '⚠️ Sin conexión. Crea o únete a una sala para reconectar, o vuelve a un solo teléfono.';
     else if (pairView !== 'none') st.textContent = '⏳ Conectando… completa los pasos de abajo.';
+    else if (lastConnectError) st.textContent = lastConnectError;
     else st.textContent = '📱 Ahora: un solo teléfono.';
     $('#pairHost').hidden = !(pairView === 'host' && !connected);
     $('#pairJoin').hidden = !(pairView === 'join' && !connected);
@@ -1736,7 +1754,7 @@
   // Modo de juego / online
   $('#btnModeLocal').addEventListener('click', () => { leaveOnline(); toast('📱 Modo un solo teléfono'); $('#dlgMode').close(); });
   $('#btnHost').addEventListener('click', hostCreate);
-  $('#btnJoin').addEventListener('click', () => { S.myName = $('#myName').value.trim(); save(); pairView = 'join'; $('#pairJoinStatus').textContent = ''; syncNetUI(); });
+  $('#btnJoin').addEventListener('click', () => { S.myName = $('#myName').value.trim(); save(); pairView = 'join'; lastConnectError = ''; $('#pairJoinStatus').textContent = ''; syncNetUI(); });
   $('#btnConnect').addEventListener('click', hostConnect);
   $('#btnMakeAnswer').addEventListener('click', guestAnswer);
   $('#btnCopyOffer').addEventListener('click', () => $('#offerOut').value ? copyText($('#offerOut').value, '📋 Código copiado') : toast('Aún se está generando el código'));
