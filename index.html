@@ -404,7 +404,7 @@
 
       <div class="set-group" id="onlineChoices">
         <h3>🌐 Online: cada quien en su teléfono</h3>
-        <p>Los dos teléfonos se conectan directamente entre sí: sin cuentas y sin servidor. Solo necesitan pasarse dos códigos por WhatsApp (o como quieran). Ambos deben estar en línea al mismo tiempo.</p>
+        <p>Los dos teléfonos se conectan directamente entre sí: sin cuentas y sin servidor. Solo necesitan pasarse dos códigos por WhatsApp (o como quieran). Ambos deben estar en línea al mismo tiempo, y la conexión puede tardar unos segundos mientras se enlazan.</p>
         <input type="text" id="myName" maxlength="20" placeholder="Tu nombre (opcional)" autocomplete="off">
         <div class="row">
           <button class="btn-sub" id="btnHost" type="button">➕ Crear sala</button>
@@ -1408,12 +1408,21 @@
          sesión.
        • Quien CREA la sala (host) lleva la partida y manda el estado a la
          otra persona (guest). El guest envía sus acciones al host.
-       • Solo se usan servidores públicos de Google/Cloudflare (STUN) para
-         que los teléfonos se "encuentren" a través de internet. Por ellos
-         NO pasa ningún dato del juego.
-       • Limitación: en algunas redes móviles muy restrictivas la conexión
-         directa puede fallar. Si pasa, prueben con otra red WiFi o usen
-         el modo "un solo teléfono".
+       • Se usan servidores públicos de Google/Cloudflare (STUN) para que
+         los teléfonos se "encuentren", y de respaldo unos servidores TURN
+         públicos y gratuitos (OpenRelay) por si la conexión directa no es
+         posible (esto es lo más frecuente: la mayoría de redes móviles
+         usan NAT compartido entre muchos clientes —"CGNAT"— y ahí STUN
+         solo no alcanza; el TURN sirve de intermediario para el tráfico,
+         SIN poder leerlo, porque va cifrado de punta a punta).
+       • Al ser un TURN público y gratuito, puede ser algo más lento o
+         fallar si está saturado. Si la conexión no se logra tras un
+         minuto, prueben otra vez (a veces basta con reintentar) o
+         cambien de red (datos móviles ↔ WiFi).
+       • Esto también significa que GitHub Pages NO es el problema: es
+         una página estática y WebRTC funciona igual ahí que en cualquier
+         otro sitio con HTTPS. Lo que suele fallar es la red de alguno de
+         los dos teléfonos, no dónde está alojado el archivo.
 
      Mensajes que viajan por el canal (JSON):
        { k:'hello', name }              → "hola, me llamo…"
@@ -1423,9 +1432,20 @@
   const ICE = { iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' }
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    // TURN de respaldo (gratuito, público, de OpenRelay): sin esto, dos
+    // teléfonos en redes móviles distintas casi nunca logran conectar,
+    // porque STUN solo no atraviesa el NAT compartido (CGNAT) que usan
+    // la mayoría de operadores. Si algún día deja de funcionar o quieres
+    // uno propio (más estable), puedes crear una cuenta gratis en
+    // metered.ca/tools/openrelay o en cloudflare.com/products/turn/ y
+    // reemplazar estas 3 líneas por tus propias credenciales.
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
   ] };
   let pc = null, dc = null, pairRole = null, pairView = 'none';   // pairView: 'none' | 'host' | 'join'
+  let watchdog = null;                                             // avisa si la conexión tarda demasiado
   const ACTIONS = ['spin', 'skip', 'pass', 'cat', 'reply'];
 
   /* ---------- Códigos de conexión (texto corto para copiar y pegar) ---------- */
@@ -1464,10 +1484,37 @@
     pc = new RTCPeerConnection(ICE);
     pc.onconnectionstatechange = () => {
       const st = pc && pc.connectionState;
-      if (st === 'failed' || st === 'closed') onDisconnected();
+      if (st === 'connected') clearWatchdog();
+      if (st === 'failed') onConnectFailed();
+      else if (st === 'closed') onDisconnected();
       else if (st === 'disconnected') { renderPill(); }
     };
     return pc;
+  }
+
+  // Si tras 25s de iniciar el emparejamiento nadie logró conectar, se avisa
+  // en vez de dejar la ventana "Conectando…" para siempre sin explicación.
+  function armWatchdog() {
+    clearWatchdog();
+    watchdog = setTimeout(() => {
+      if (!connected) toast('⏳ Está tardando más de lo normal. Revisen que ambos tengan internet activo, o vuelvan a intentarlo.');
+    }, 25000);
+  }
+  function clearWatchdog() { if (watchdog) { clearTimeout(watchdog); watchdog = null; } }
+
+  // La conexión se dio por perdida sin llegar a establecerse (o se cayó
+  // después de fallar, no solo de cerrarse limpiamente): se limpia todo
+  // para que la persona pueda generar códigos nuevos y reintentar.
+  function onConnectFailed() {
+    clearWatchdog();
+    const wasConnected = connected;
+    closePeer();
+    mode = 'local'; connected = false; remote = null; guestWaiting = false;
+    if (wasConnected) toast('⚠️ Se perdió la conexión. Vuelvan a crear o unirse a una sala para reconectar.');
+    else toast('❌ No se pudo conectar. Verifiquen que ambos códigos se copiaron completos, o prueben con otra red.');
+    pairRole = null; pairView = 'none';
+    ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
+    syncNetUI(); render();
   }
 
   function attachChannel(ch) {
@@ -1479,8 +1526,10 @@
     if (ch.readyState === 'open') open();          // algunos navegadores lo entregan ya abierto
   }
 
-  // Espera a que el navegador termine de reunir sus "direcciones" (máx. 4.5 s)
-  function waitIce(peer, ms = 4500) {
+  // Espera a que el navegador termine de reunir sus "direcciones" (máx. 7 s).
+  // Con TURN de por medio tarda algo más que con solo STUN, por eso el
+  // margen es mayor que antes.
+  function waitIce(peer, ms = 7000) {
     return new Promise(res => {
       if (peer.iceGatheringState === 'complete') return res();
       const done = () => { peer.removeEventListener('icegatheringstatechange', chk); clearTimeout(t); res(); };
@@ -1504,6 +1553,7 @@
       await peer.setLocalDescription(await peer.createOffer());
       await waitIce(peer);
       $('#offerOut').value = await encodeDesc(peer.localDescription);
+      armWatchdog();
     } catch (e) { toast('No se pudo crear la sala: ' + (e.message || e)); }
   }
 
@@ -1522,6 +1572,7 @@
       await peer.setLocalDescription(await peer.createAnswer());
       await waitIce(peer);
       $('#answerOut').value = await encodeDesc(peer.localDescription);
+      armWatchdog();
       toast('✅ Listo: envía tu código de respuesta');
     } catch (e) { toast(e.message || 'Código no válido'); }
     btn.disabled = false;
@@ -1534,11 +1585,13 @@
       const desc = await decodeDesc($('#answerIn').value);
       if (desc.type !== 'answer') throw new Error('Ese es un código de invitación; aquí va el de respuesta');
       await pc.setRemoteDescription(desc);
+      armWatchdog();
       toast('Conectando…');
     } catch (e) { toast(e.message || 'Código no válido'); }
   }
 
   function onChannelOpen() {
+    clearWatchdog();
     connected = true; mode = pairRole; remote = null; guestWaiting = false; pairView = 'none';
     send({ k: 'hello', name: S.myName });
     if (mode === 'host') pushState();
@@ -1548,6 +1601,7 @@
   }
 
   function onDisconnected() {
+    clearWatchdog();
     if (!connected) return;
     connected = false; guestWaiting = false;
     toast('⚠️ Se perdió la conexión');
@@ -1555,6 +1609,7 @@
   }
 
   function leaveOnline() {
+    clearWatchdog();
     closePeer();
     mode = 'local'; connected = false; remote = null; peerName = ''; pairRole = null; pairView = 'none'; guestWaiting = false;
     ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
