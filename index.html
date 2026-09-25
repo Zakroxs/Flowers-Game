@@ -423,6 +423,7 @@
         <p class="step"><b>Paso 2.</b> Cuando te devuelva su código de respuesta, pégalo aquí:</p>
         <textarea class="code" id="answerIn" spellcheck="false" placeholder="Pega aquí el código de respuesta"></textarea>
         <button class="btn-sub" id="btnConnect" type="button">🔗 Conectar</button>
+        <p class="net-status" id="pairHostStatus" style="margin-top:2px"></p>
       </div>
 
       <!-- Pasos de quien SE UNE a la sala -->
@@ -436,6 +437,7 @@
           <button class="btn-sub" id="btnCopyAnswer" type="button">📋 Copiar</button>
           <button class="btn-sub" id="btnShareAnswer" type="button">📤 Compartir</button>
         </div>
+        <p class="net-status" id="pairJoinStatus" style="margin-top:2px"></p>
       </div>
     </div>
   </div>
@@ -1489,7 +1491,22 @@
       else if (st === 'closed') onDisconnected();
       else if (st === 'disconnected') { renderPill(); }
     };
+    // Traduce el estado técnico de la conexión a un mensaje que SIEMPRE
+    // se ve en pantalla (no solo un aviso que desaparece a los segundos),
+    // para que nunca parezca que "no pasa nada" mientras conecta o falla.
+    pc.oniceconnectionstatechange = () => {
+      const t = { checking: '🔎 Buscando la mejor ruta de conexión…', connected: '✅ ¡Conectado!', completed: '✅ ¡Conectado!',
+                  disconnected: '⚠️ Conexión inestable…', failed: '❌ No se pudo conectar (revisa si tienes una VPN activa y pruébalo sin ella)' }[pc.iceConnectionState];
+      if (t) setPairStatus(t);
+    };
     return pc;
+  }
+
+  // Escribe en la línea de estado visible del paso que esté abierto ahora
+  // (no depende de un "toast" temporal, así que no se puede pasar por alto).
+  function setPairStatus(msg) {
+    const id = !$('#pairHost').hidden ? '#pairHostStatus' : (!$('#pairJoin').hidden ? '#pairJoinStatus' : null);
+    if (id) $(id).textContent = msg;
   }
 
   // Si tras 25s de iniciar el emparejamiento nadie logró conectar, se avisa
@@ -1497,7 +1514,7 @@
   function armWatchdog() {
     clearWatchdog();
     watchdog = setTimeout(() => {
-      if (!connected) toast('⏳ Está tardando más de lo normal. Revisen que ambos tengan internet activo, o vuelvan a intentarlo.');
+      if (!connected) { const m = '⏳ Está tardando más de lo normal. Revisen que ambos tengan internet activo y, si usan VPN, pruébenlo sin ella.'; toast(m); setPairStatus(m); }
     }, 25000);
   }
   function clearWatchdog() { if (watchdog) { clearTimeout(watchdog); watchdog = null; } }
@@ -1511,7 +1528,7 @@
     closePeer();
     mode = 'local'; connected = false; remote = null; guestWaiting = false;
     if (wasConnected) toast('⚠️ Se perdió la conexión. Vuelvan a crear o unirse a una sala para reconectar.');
-    else toast('❌ No se pudo conectar. Verifiquen que ambos códigos se copiaron completos, o prueben con otra red.');
+    else toast('❌ No se pudo conectar. Verifiquen que ambos códigos se copiaron completos, o prueben con otra red (y sin VPN).');
     pairRole = null; pairView = 'none';
     ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
     syncNetUI(); render();
@@ -1546,15 +1563,16 @@
     if (!rtcOk()) return;
     S.myName = $('#myName').value.trim(); save();
     pairView = 'host'; pairRole = 'host'; syncNetUI();
-    $('#offerOut').value = ''; $('#answerIn').value = '';
+    $('#offerOut').value = ''; $('#answerIn').value = ''; $('#pairHostStatus').textContent = '⏳ Generando tu código…';
     try {
       const peer = newPeer();
       attachChannel(peer.createDataChannel('flowers'));
       await peer.setLocalDescription(await peer.createOffer());
       await waitIce(peer);
       $('#offerOut').value = await encodeDesc(peer.localDescription);
+      $('#pairHostStatus').textContent = '📤 Envía el código de arriba. En cuanto pegues su respuesta y toques “Conectar”, se enlazan.';
       armWatchdog();
-    } catch (e) { toast('No se pudo crear la sala: ' + (e.message || e)); }
+    } catch (e) { toast('No se pudo crear la sala: ' + (e.message || e)); $('#pairHostStatus').textContent = '❌ ' + (e.message || e); }
   }
 
   // PASO B (quien se une): pegar la invitación y generar el código de respuesta
@@ -1562,6 +1580,7 @@
     if (!rtcOk()) return;
     S.myName = $('#myName').value.trim(); save();
     const btn = $('#btnMakeAnswer'); btn.disabled = true;
+    $('#pairJoinStatus').textContent = '⏳ Generando tu respuesta…';
     try {
       const desc = await decodeDesc($('#offerIn').value);
       if (desc.type !== 'offer') throw new Error('Ese es un código de respuesta; aquí va el de invitación');
@@ -1572,22 +1591,27 @@
       await peer.setLocalDescription(await peer.createAnswer());
       await waitIce(peer);
       $('#answerOut').value = await encodeDesc(peer.localDescription);
+      $('#pairJoinStatus').textContent = '📤 Envía el código de arriba y esperen a que se enlacen solos.';
       armWatchdog();
       toast('✅ Listo: envía tu código de respuesta');
-    } catch (e) { toast(e.message || 'Código no válido'); }
+    } catch (e) { toast(e.message || 'Código no válido'); $('#pairJoinStatus').textContent = '❌ ' + (e.message || 'Código no válido'); }
     btn.disabled = false;
   }
 
   // PASO C (quien creó la sala): pegar el código de respuesta y conectar
   async function hostConnect() {
+    const btn = $('#btnConnect'); btn.disabled = true;
+    $('#pairHostStatus').textContent = '🔄 Conectando…';
     try {
-      if (!pc || pairRole !== 'host') throw new Error('Primero genera el código de invitación');
+      if (!pc || pairRole !== 'host') throw new Error('Primero genera el código de invitación (vuelve a tocar “Crear sala”)');
+      if (!$('#answerIn').value.trim()) throw new Error('Pega primero el código de respuesta que te enviaron');
       const desc = await decodeDesc($('#answerIn').value);
       if (desc.type !== 'answer') throw new Error('Ese es un código de invitación; aquí va el de respuesta');
       await pc.setRemoteDescription(desc);
       armWatchdog();
       toast('Conectando…');
-    } catch (e) { toast(e.message || 'Código no válido'); }
+    } catch (e) { toast(e.message || 'Código no válido'); $('#pairHostStatus').textContent = '❌ ' + (e.message || 'Código no válido'); }
+    btn.disabled = false;
   }
 
   function onChannelOpen() {
@@ -1613,6 +1637,7 @@
     closePeer();
     mode = 'local'; connected = false; remote = null; peerName = ''; pairRole = null; pairView = 'none'; guestWaiting = false;
     ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
+    ['#pairHostStatus', '#pairJoinStatus'].forEach(s => { $(s).textContent = ''; });
     syncNetUI(); render();
   }
 
@@ -1711,7 +1736,7 @@
   // Modo de juego / online
   $('#btnModeLocal').addEventListener('click', () => { leaveOnline(); toast('📱 Modo un solo teléfono'); $('#dlgMode').close(); });
   $('#btnHost').addEventListener('click', hostCreate);
-  $('#btnJoin').addEventListener('click', () => { S.myName = $('#myName').value.trim(); save(); pairView = 'join'; syncNetUI(); });
+  $('#btnJoin').addEventListener('click', () => { S.myName = $('#myName').value.trim(); save(); pairView = 'join'; $('#pairJoinStatus').textContent = ''; syncNetUI(); });
   $('#btnConnect').addEventListener('click', hostConnect);
   $('#btnMakeAnswer').addEventListener('click', guestAnswer);
   $('#btnCopyOffer').addEventListener('click', () => $('#offerOut').value ? copyText($('#offerOut').value, '📋 Código copiado') : toast('Aún se está generando el código'));
