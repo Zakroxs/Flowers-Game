@@ -307,7 +307,8 @@
 
      Común a todas las partidas:
         favs, custom (preguntas propias), names {a,b} (un teléfono),
-        myName (online), specials, vibrate, saves (partidas guardadas)
+        myName (online), specials, vibrate, saves (partidas guardadas),
+        turn {on, urls[], user, pass} (TURN propio para conectar online)
      ===================================================================== */
   const KEY = 'flowers_game_v2';
   const OLD_KEY = 'flowers_game_v1';    // versión anterior: se lee para no perder tus datos
@@ -338,8 +339,11 @@
     myName: saved.myName || '',
     specials: saved.specials !== false,
     vibrate: saved.vibrate !== false,
-    saves: Array.isArray(saved.saves) ? saved.saves : []
+    saves: Array.isArray(saved.saves) ? saved.saves : [],
+    // TURN propio: sin esto no hay conexión entre redes distintas.
+    turn: Object.assign({ on: false, urls: [], user: '', pass: '' }, saved.turn || {})
   };
+  if (!Array.isArray(S.turn.urls)) S.turn.urls = [];
   if (!CATS[S.game.category]) S.game.category = 'all';
   const save = () => store.set(S);
 
@@ -882,10 +886,28 @@
      ===================================================================== */
   function openSettings() {
     $('#optSpecial').checked = S.specials; $('#optVibrate').checked = S.vibrate;
+    $('#turnOn').checked = !!S.turn.on;
+    $('#turnUrls').value = (S.turn.urls || []).join('\n');
+    $('#turnUser').value = S.turn.user || '';
+    $('#turnPass').value = S.turn.pass || '';
+    $('#netServers').textContent = iceLabel();
     $('#customCat').replaceChildren(...Object.entries(CATS).filter(([k]) => k !== 'all')
       .map(([k, c]) => h('option', { value: k }, `${c.emoji} ${c.label}`)));
     renderCustom();
     $('#dlgSettings').showModal();
+  }
+
+  // Guarda las credenciales de TURN propio a medida que se escriben, y
+  // avisa si quedan a medio completar (por ejemplo, URLs sin usuario).
+  function readTurn() {
+    S.turn.on = $('#turnOn').checked;
+    S.turn.urls = $('#turnUrls').value.split('\n').map(s => s.trim()).filter(Boolean);
+    S.turn.user = $('#turnUser').value.trim();
+    S.turn.pass = $('#turnPass').value;
+    save();
+    $('#netServers').textContent = iceLabel();
+    const n = S.turn.urls.length;
+    $('#netServers').style.color = (S.turn.on && !n) ? '#f87171' : '';
   }
 
   function renderCustom() {
@@ -947,25 +969,82 @@
        { k:'hello', name }              → "hola, me llamo…"
        { k:'state', s:{…} }             → (host → guest) estado completo
        { k:'act', a, v, note }          → (guest → host) una acción
+      ===================================================================== */
+
+     /* =====================================================================
+        SERVIDORES ICE (STUN y TURN)  ←←← AQUÍ SE CONFIGURAN
+     ---------------------------------------------------------------------
+     POR QUÉ ESTO IMPORTA MÁS DE LO QUE PARECE
+     Cuando los dos están en el MISMO wifi, los navegadores se encuentran
+     solos y ni siquiera hace falta STUN. Por eso el juego "funcionaba
+     bien" en las pruebas de a una persona. Pero si cada uno está en una
+     red distinta (datos móviles en ciudades diferentes), los dos están
+     detrás de un NAT compartido (CGNAT) y NO existe ruta directa: hace
+     falta un TURN que reenvíe el tráfico. Sin un TURN que funcione, la
+     conexión entre redes distintas es imposible, por más código que
+     tenga el juego.
+
+     CÓMO PROBAR SI TU RED ESTÁ LISTA
+     En ⚙️ Ajustes → "🔍 Probar conexión" (o en la ventana 🌐). Se ve si
+     aparece un candidato de tipo "relay" (= hay TURN y todo bien) o solo
+     "host/srflx" (= tu red necesita TURN y no encontró uno).
+
+     SI NO APARECE "relay": PEGÁ TUS PROPIAS CREDENCIALES
+     Un TURN propio es la única forma de garantizarlo. Se pega en
+     ⚙️ Ajustes → "Servidor TURN propio" (queda guardado en el navegador
+     y tiene prioridad sobre todo lo de abajo). Se consigue gratis con:
+       • Un VPS propio: docker run -d --network=host coturn/coturn ...
+         (es la opción más fiable; ver README)
+       • Una cuenta gratuita en un proveedor de TURN, que te da una URL,
+         un usuario y una contraseña.
+     Las URLs se escriben una por línea, por ejemplo:
+         turn:mi.turn.com:3478
+         turn:mi.turn.com:3478?transport=tcp
+         turns:mi.turn.com:5349
+
+     NOTA SOBRE LOS PÚBLICOS DE ABAJO
+     No hay ningún TURN público que sea confiable: se caen, se saturan y
+     varios ya no acceptan las credenciales fijas. OpenRelay fue el
+     clásico y hoy figura como no funcional en varios reportes, por eso
+     queda al final y comentado como "por si acaso". No confíes en él:
+     si el autodiagnóstico no muestra "relay", usa el tuyo.
      ===================================================================== */
-  const ICE = { iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    // TURN de respaldo (gratuito, público, de OpenRelay): sin esto, dos
-    // teléfonos en redes móviles distintas casi nunca logran conectar,
-    // porque STUN solo no atraviesa el NAT compartido (CGNAT) que usan
-    // la mayoría de operadores. Si algún día deja de funcionar o quieres
-    // uno propio (más estable), puedes crear una cuenta gratis en
-    // metered.ca/tools/openrelay o en cloudflare.com/products/turn/ y
-    // reemplazar estas 3 líneas por tus propias credenciales.
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-  ] };
+  const STUN_PUBLICOS = [
+    'stun:stun.l.google.com:19302',
+    'stun:stun1.l.google.com:19302',
+    'stun:stun.cloudflare.com:3478'
+  ];
+  const TURN_PUBLICOS = [
+    // Última instancia, no debería hacer falta si pegaste uno propio.
+    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
+      username: 'openrelayproject', credential: 'openrelayproject' }
+  ];
+
+  // Arma la lista de servidores. Las credenciales propias van PRIMERO:
+  // si el usuario pegó un TURN, es el que va a responder y el resto es
+  // solo de apoyo para cuando las dos redes son permisivas.
+  function iceServers() {
+    const list = [];
+    const own = S.turn || {};
+    const urls = (own.urls || []).map(s => String(s).trim()).filter(Boolean);
+    if (own.on && urls.length) {
+      list.push({ urls, username: (own.user || '').trim() || undefined, credential: (own.pass || '') || undefined });
+    }
+    STUN_PUBLICOS.forEach(u => list.push({ urls: u }));
+    TURN_PUBLICOS.forEach(t => list.push(t));
+    return list;
+  }
+  // Texto corto para la lista de servidores (sirve para diagnóstico).
+  const iceLabel = () => {
+    const own = (S.turn || {}), n = (own.urls || []).filter(s => String(s).trim()).length;
+    return (own.on && n) ? `TURN propio (${n} URL)` : 'solo servidores públicos';
+  };
+  const ICE = () => ({ iceServers: iceServers() });
+
   let pc = null, dc = null, pairRole = null, pairView = 'none';   // pairView: 'none' | 'host' | 'join'
   let watchdog = null;                                             // avisa si la conexión tarda demasiado
   let lastConnectError = '';                                       // se muestra en la ventana aunque el aviso ya se haya desvanecido
+  let pendingFail = false;        // (guest) falló el enlace esperando la respuesta: NO se destruye
   const ACTIONS = ['spin', 'skip', 'pass', 'cat', 'reply'];
 
   /* ---------- Códigos de conexión (texto corto para copiar y pegar) ---------- */
@@ -980,7 +1059,11 @@
     return 'CC1p' + toB64u(bytes);
   }
   async function decodeDesc(raw) {
-    const m = String(raw || '').match(/CC1[zp][A-Za-z0-9_-]+/);      // tolera texto extra alrededor del código
+    // Se quitan los espacios y saltos de línea ANTES de buscar el código:
+    // si el chat (WhatsApp sobre todo) parte el texto en varios renglones,
+    // el patrón no entraba y el error era "Ese no parece un código".
+    const clean = String(raw || '').replace(/\s+/g, '');
+    const m = clean.match(/CC1[zp][A-Za-z0-9_-]+/);   // tolera texto extra alrededor del código
     if (!m) throw new Error('Ese no parece un código de Flowers');
     const mode = m[0][3], bytes = fromB64u(m[0].slice(4));
     let out = bytes;
@@ -989,19 +1072,56 @@
       out = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
     }
     const o = JSON.parse(new TextDecoder().decode(out));
+    if (!o || !o.s || !/a=candidate:/.test(o.s)) {
+      // Un SDP sin candidatos no sirve para nada: es mejor avisar que
+      // mandar un código que el otro no va a poder usar.
+      throw new Error('El código llegó sin datos de conexión. Genera uno nuevo.');
+    }
     return { type: o.t, sdp: o.s };
   }
 
   /* ---------- Conexión ---------- */
   function closePeer() {
     if (dc) { dc.onclose = null; dc.onmessage = null; try { dc.close(); } catch {} }
-    if (pc) { pc.onconnectionstatechange = null; try { pc.close(); } catch {} }
+    if (pc) {
+      pc.onconnectionstatechange = null; pc.oniceconnectionstatechange = null;
+      pc.onicecandidate = null;
+      try { pc.close(); } catch {}
+    }
     dc = pc = null;
+  }
+
+  // Traduce una línea de candidato ICE a su tipo (host/srflx/prflx/relay).
+  // El navegador lo dice de dos formas según el motor: "typ relay" o
+  // "relay raddr…", así que se buscan las dos.
+  const candType = line => {
+    const m = /\styp(e)?\s+(host|srflx|prflx|relay)\b/i.exec(line || '')
+         || /\b(host|srflx|prflx|relay)\s+(raddr|rport)/i.exec(line || '');
+    return m ? (m[2] || m[1]).toLowerCase() : null;
+  };
+
+  // Traduce una lista de candidatos a algo legible, para saber si esta red
+  // tiene arreglo sin TURN o si de verdad necesita el relay.
+  const candText = info => {
+    const t = [];
+    if (info.host) t.push('red local');
+    if (info.srflx) t.push('pública/STUN');
+    if (info.relay) t.push('relay/TURN ✅');
+    return t.length ? t.join(' · ') : 'ninguna';
+  };
+  // Si estamos en una red que necesita TURN y no lo encontró, el error
+  // honesto es "no hay relay", no "revisa la VPN".
+  const noRelayMsg = () => 'No se encontró ningún relay (TURN). Esta red lo necesita para hablar con la otra: agrega un TURN propio en ⚙️ Ajustes.';
+
+  // Vuelca los candidatos a la consola, para poder revisar un fallo sin
+  // depender de lo que se vea en pantalla.
+  function logCands(who, info) {
+    console.log(`[Flowers] ${who} · rutas: ${candText(info)} · ${info.n} candidato(s) · completo=${!!info.full} · ${iceLabel()}`);
   }
 
   function newPeer() {
     closePeer();
-    pc = new RTCPeerConnection(ICE);
+    pc = new RTCPeerConnection(ICE());
     pc.onconnectionstatechange = () => {
       const st = pc && pc.connectionState;
       if (st === 'connected') clearWatchdog();
@@ -1018,7 +1138,7 @@
       const s = pc && pc.iceConnectionState;
       const t = { checking: '🔎 Buscando la mejor ruta de conexión…', connected: '✅ ¡Conectado!', completed: '✅ ¡Conectado!',
                   disconnected: '⚠️ Conexión inestable…',
-                  failed: '❌ Error de enlace: no se pudo conectar (revisa si alguno tiene VPN activa y pruébenlo sin ella)' }[s];
+                  failed: '❌ Error de enlace: no se pudo conectar entre estas dos redes' }[s];
       if (t) setPairStatus(t);
       if (s === 'failed') onConnectFailed();
     };
@@ -1032,39 +1152,68 @@
     if (id) $(id).textContent = msg;
   }
 
-  // Vigila que el emparejamiento SIEMPRE termine en algo visible:
-  //  · a los 25s, un aviso de que está tardando (por si sigue intentando)
-  //  · a los 45s, un ERROR DE ENLACE definitivo si aún no conectó, aunque
-  //    el navegador nunca haya avisado por su cuenta que falló (pasa en
-  //    algunos navegadores, que se quedan "buscando" sin fin).
+  // Vigila que el emparejamiento SIEMPRE termine en algo visible, pero SOLO
+  // mientras se está conectando de verdad (después de pegar la respuesta).
+  // Antes de eso se está esperando que una persona mande un código por
+  // chat, y eso puede tardar minutos: si se destruía la sala a los 45 s,
+  // el otro nunca alcanzaba a pegar su respuesta.
+  //  · a los 40s, un aviso de que está tardando
+  //  · a los 75s, se da por perdido y se ofrece reintentar
   function armWatchdog() {
     clearWatchdog();
     watchdog = setTimeout(() => {
       if (connected) return;
-      const m = '⏳ Está tardando más de lo normal. Revisen que ambos tengan internet activo y, si usan VPN, pruébenlo sin ella.';
+      const m = '⏳ Sigue buscando una ruta entre las dos redes. Si hace mucho, revisen que los dos tengan internet y sin VPN.';
       toast(m); setPairStatus(m);
-      watchdog = setTimeout(() => { if (!connected) onConnectFailed(); }, 20000);
-    }, 25000);
+      watchdog = setTimeout(() => { if (!connected) onConnectFailed(); }, 35000);
+    }, 40000);
   }
   function clearWatchdog() { if (watchdog) { clearTimeout(watchdog); watchdog = null; } }
 
-  // La conexión se dio por perdida sin llegar a establecerse (o se cayó
-  // después de fallar, no solo de cerrarse limpiamente): se limpia todo
-  // para que la persona pueda generar códigos nuevos y reintentar.
+  // La conexión se perdió o nunca se logró. Ahora es RECUPERABLE: no borra
+  // lo que la persona ya escribió ni la devuelve al inicio, solo avisa y
+  // deja el botón de reintentar. Antes cualquier fallo (incluso un simple
+  // saldo de WhatsApp lento) borraba los cuatro campos y obligaba a
+  // empezar de cero, que es la forma más rápida de que alguien se rinda.
   function onConnectFailed() {
+    // Caso especial: el invitado ya generó su respuesta y está esperando
+    // que el anfitrión pegue el código. Si ICE falla mientras espera, NO se
+    // destruye nada: cuando el anfitrión aplique la respuesta se relanzan
+    // las comprobaciones y suele recuperarse solo.
+    if (pairRole === 'guest' && pairView === 'join' && !connected) {
+      if (pendingFail) return;
+      pendingFail = true;
+      setPairStatus('⏳ Tu red no encontró ruta todavía. Cuando tu pareja pegue su código se reintenta solo; si no funciona, generen códigos nuevos.');
+      return;
+    }
     clearWatchdog();
     const wasConnected = connected;
     closePeer();
-    mode = 'local'; connected = false; remote = null; guestWaiting = false;
+    connected = false; remote = null; guestWaiting = false; pendingFail = false;
     const msg = wasConnected
-      ? '⚠️ Se perdió la conexión. Vuelvan a crear o unirse a una sala para reconectar.'
-      : '❌ Error de enlace: no se logró conectar. Generen códigos nuevos y verifiquen que ambos tengan internet (y sin VPN).';
+      ? '⚠️ Se perdió la conexión. Usen “Reintentar” para volver a enlazar.'
+      : '❌ No se logró conectar entre estas dos redes. Usen “Reintentar” para probar de nuevo.';
     toast(msg);
     lastConnectError = msg;
-    pairRole = null; pairView = 'none';
-    ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
+    if (!wasConnected) { mode = 'local'; pairRole = null; }   // el paso sigue abierto para reintentar
     syncNetUI(); render();
   }
+
+  // Reintentar el paso donde se quedó, sin perder nada de lo escrito.
+  // En el caso del anfitrión hay que generar un código nuevo: el otro
+  // teléfono ya respondió al código anterior, así que ese no sirve más.
+  function retryPair() {
+    if (pairView === 'host') {
+      hostCreate().then(() => {
+        if ($('#offerOut').value) $('#pairHostStatus').textContent = '🔁 Código nuevo generado. Mándaselo otra vez a tu pareja y pega su respuesta nueva.';
+      });
+      return;
+    }
+    if (pairView === 'join') { pendingFail = false; $('#btnMakeAnswer').disabled = false; return guestAnswer(); }
+  }
+
+  // Los dos paneles (crear sala / unirse) tienen su propio botón de reintento.
+  const setRetryVisible = v => { $('#btnRetry').hidden = !v; $('#btnRetry2').hidden = !v; };
 
   function attachChannel(ch) {
     dc = ch;
@@ -1075,36 +1224,131 @@
     if (ch.readyState === 'open') open();          // algunos navegadores lo entregan ya abierto
   }
 
-  // Espera a que el navegador termine de reunir sus "direcciones" (máx. 7 s).
-  // Con TURN de por medio tarda algo más que con solo STUN, por eso el
-  // margen es mayor que antes.
-  function waitIce(peer, ms = 7000) {
+  /* ---------- Reunir los candidatos (el paso que más fallaba) ----------
+     Se cambió por completo la forma de esperar. Antes se cortaba a los 7 s
+     fijos y se mandaba el SDP como estaba, aunque le faltara el candidato
+     de TURN: en redes distintas ese candidato es el ÚNICO que sirve, así
+     que el otro teléfono se quedaba sin datos para conectar.
+
+     Ahora:
+       · se escucha 'icecandidate' y se termina con candidate === null
+         (que es el fin real de la recolección, y a veces 'complete'
+          directamente no se dispara);
+       · si aparece un candidato 'relay' se resuelve EN EL ACTO, sin
+         esperar al resto: con un relay ya es posible conectar y seguir
+         esperando solo hace perder segundos;
+       · el límite es de 20 s (con TURN de por medio puede tardar bastante)
+         y al cumplirse se avisa, en vez de cortar en silencio.
+     Devuelve qué tipos de candidato se reunieron, para poder mostrarlos. */
+  function waitIce(peer, ms = 20000) {
+    const info = { host: false, srflx: false, prflx: false, relay: false, n: 0, full: false };
     return new Promise(res => {
-      if (peer.iceGatheringState === 'complete') return res();
-      const done = () => { peer.removeEventListener('icegatheringstatechange', chk); clearTimeout(t); res(); };
-      const chk = () => { if (peer.iceGatheringState === 'complete') done(); };
-      peer.addEventListener('icegatheringstatechange', chk);
-      const t = setTimeout(done, ms);
+      if (peer.iceGatheringState === 'complete') { info.full = true; return res(info); }
+      let t = null, slowT = null;
+      const cleanup = () => {
+        clearTimeout(t); clearTimeout(slowT);
+        peer.removeEventListener('icecandidate', onCand);
+        peer.removeEventListener('icegatheringstatechange', onState);
+      };
+      const done = full => { cleanup(); info.full = !!full; res(info); };
+      const onCand = e => {
+        if (!e.candidate) return done(true);            // fin de la recolección
+        info.n++;
+        const ty = candType(e.candidate.candidate);
+        if (ty && ty in info) info[ty] = true;
+        if (info.relay) done(false);                    // ya hay relay: no hace falta esperar
+      };
+      const onState = () => { if (peer.iceGatheringState === 'complete') done(true); };
+      peer.addEventListener('icecandidate', onCand);
+      peer.addEventListener('icegatheringstatechange', onState);
+      // A los 12 s todavía no terminó, se avisa que sigue buscando.
+      slowT = setTimeout(() => {
+        if (!info.full) setPairStatus('⏳ Todavía buscando rutas… si tu red pide TURN puede tardar. Si no aparece "relay", hace falta un TURN propio (⚙️ Ajustes).');
+      }, 12000);
+      t = setTimeout(() => done(false), ms);
     });
   }
 
   const rtcOk = () => { if (!window.RTCPeerConnection) { toast('Este navegador no soporta el modo online'); return false; } return true; };
+
+  /* ---------- Autodiagnóstico: ¿esta red puede conectarse? ----------
+     Sirve para probar el modo online SOLO, sin esperar a la otra persona.
+     Reúne candidatos y los muestra:
+       · "relay" presente  → hay TURN, debería conectar entre redes.
+       · solo host/srflx   → en la misma red va, entre redes distintas no.
+     Es la forma rápida de saber si el problema es el juego o la red. */
+  async function testConnection(box) {
+    if (!window.RTCPeerConnection) { box.textContent = '❌ Este navegador no soporta WebRTC.'; return; }
+    const testPc = new RTCPeerConnection(ICE());
+    box.textContent = `⏳ Buscando rutas (${iceLabel()})…`;
+    const info = { host: false, srflx: false, prflx: false, relay: false, n: 0, full: false };
+    const seen = [];
+    testPc.onicecandidate = e => {
+      if (!e.candidate) return;
+      const ty = candType(e.candidate.candidate) || '?';
+      seen.push(ty);
+      info.n++;
+      if (ty in info) info[ty] = true;
+      box.textContent = `⏳ Buscando rutas… ${info.n} candidata(s), sin relay todavía`;
+    };
+    try {
+      // La recolección de candidatos arranca al aplicar una descripción
+      // local, así que hay que crear un canal y aplicar un offer de verdad.
+      testPc.createDataChannel('test');
+      await testPc.setLocalDescription(await testPc.createOffer());
+    } catch (e) {
+      try { testPc.close(); } catch {}
+      box.textContent = '❌ No se pudo probar: ' + (e.message || e);
+      return;
+    }
+    const res = await waitIce(testPc, 15000);
+    Object.assign(info, res);
+    try { testPc.close(); } catch {}
+    logCands('test', info);
+    const relay = info.relay;
+    box.innerHTML = '';
+    box.append(
+      h('b', {}, relay ? '✅ Esta red puede conectarse' : '⚠️ Esta red NO puede conectarse a otra red distinta'),
+      h('br'),
+      h('span', {}, `Rutas encontradas: ${candText(info)} (${info.n} candidatas). Servidores: ${iceLabel()}.`)
+    );
+    if (relay) {
+      box.append(h('br'), h('span', {}, 'Tienes relay de TURN, así que el modo online debería funcionar entre redes diferentes.'));
+    } else {
+      box.append(h('br'), h('span', {}, noRelayMsg() + ' Mientras tanto, el modo de un solo teléfono funciona igual.'));
+    }
+    seen.forEach((t, i) => console.log(`[Flowers] test · candidato ${i + 1}: ${t}`));
+  }
+
+  // Texto de estado al terminar de reunir candidatos: dice si se consiguió
+  // un relay, que es LA diferencia entre "va a funcionar" y "no va a".
+  function gatheredMsg(info, nextStep) {
+    const got = candText(info);
+    const relay = info.relay
+      ? 'Rutas: ' + got + ' ✅'
+      : 'Rutas: ' + got + ' ⚠️ sin relay';
+    return relay + ' · ' + nextStep;
+  }
 
   // PASO A (quien crea la sala): generar el código de invitación
   async function hostCreate() {
     if (!rtcOk()) return;
     lastConnectError = '';
     S.myName = $('#myName').value.trim(); save();
-    pairView = 'host'; pairRole = 'host'; syncNetUI();
-    $('#offerOut').value = ''; $('#answerIn').value = ''; $('#pairHostStatus').textContent = '⏳ Generando tu código…';
+    pairView = 'host'; pairRole = 'host'; pendingFail = false; syncNetUI();
+    $('#offerOut').value = ''; $('#answerIn').value = '';
+    setRetryVisible(false);
+    $('#pairHostStatus').textContent = '⏳ Generando tu código…';
     try {
       const peer = newPeer();
       attachChannel(peer.createDataChannel('flowers'));
       await peer.setLocalDescription(await peer.createOffer());
-      await waitIce(peer);
+      const info = await waitIce(peer);
+      logCands('host', info);
       $('#offerOut').value = await encodeDesc(peer.localDescription);
-      $('#pairHostStatus').textContent = '📤 Envía el código de arriba. En cuanto pegues su respuesta y toques “Conectar”, se enlazan.';
-      armWatchdog();
+      // NO se arma el watchdog acá: a partir de este punto se espera a que
+      // una persona mande un código por chat, y eso puede tardar lo que sea.
+      $('#pairHostStatus').textContent = gatheredMsg(info, 'envía el código de arriba a tu pareja');
     } catch (e) { toast('No se pudo crear la sala: ' + (e.message || e)); $('#pairHostStatus').textContent = '❌ ' + (e.message || e); }
   }
 
@@ -1118,15 +1362,16 @@
     try {
       const desc = await decodeDesc($('#offerIn').value);
       if (desc.type !== 'offer') throw new Error('Ese es un código de respuesta; aquí va el de invitación');
-      pairRole = 'guest';
+      pairRole = 'guest'; pendingFail = false;
       const peer = newPeer();
       peer.ondatachannel = e => attachChannel(e.channel);
       await peer.setRemoteDescription(desc);
       await peer.setLocalDescription(await peer.createAnswer());
-      await waitIce(peer);
+      const info = await waitIce(peer);
+      logCands('guest', info);
       $('#answerOut').value = await encodeDesc(peer.localDescription);
-      $('#pairJoinStatus').textContent = '📤 Envía el código de arriba y esperen a que se enlacen solos.';
-      armWatchdog();
+      // Igual que en el paso A: acá se espera a una persona, no al reloj.
+      $('#pairJoinStatus').textContent = gatheredMsg(info, 'envía el código de arriba y espera a que se enlacen');
       toast('✅ Listo: envía tu código de respuesta');
     } catch (e) { toast(e.message || 'Código no válido'); $('#pairJoinStatus').textContent = '❌ ' + (e.message || 'Código no válido'); }
     btn.disabled = false;
@@ -1135,6 +1380,7 @@
   // PASO C (quien creó la sala): pegar el código de respuesta y conectar
   async function hostConnect() {
     const btn = $('#btnConnect'); btn.disabled = true;
+    setRetryVisible(false);
     $('#pairHostStatus').textContent = '🔄 Conectando…';
     try {
       if (!pc || pairRole !== 'host') throw new Error('Primero genera el código de invitación (vuelve a tocar “Crear sala”)');
@@ -1142,6 +1388,8 @@
       const desc = await decodeDesc($('#answerIn').value);
       if (desc.type !== 'answer') throw new Error('Ese es un código de invitación; aquí va el de respuesta');
       await pc.setRemoteDescription(desc);
+      // Acá sí: desde este punto depende de la red, no de que alguien
+      // mande un mensaje. El watchdog va con la ventana larga.
       armWatchdog();
       toast('Conectando…');
     } catch (e) { toast(e.message || 'Código no válido'); $('#pairHostStatus').textContent = '❌ ' + (e.message || 'Código no válido'); }
@@ -1150,7 +1398,8 @@
 
   function onChannelOpen() {
     clearWatchdog();
-    connected = true; mode = pairRole; remote = null; guestWaiting = false; pairView = 'none'; lastConnectError = '';
+    connected = true; mode = pairRole; remote = null; guestWaiting = false; pairView = 'none'; lastConnectError = ''; pendingFail = false;
+    setRetryVisible(false);
     send({ k: 'hello', name: S.myName });
     if (mode === 'host') pushState();
     if ($('#dlgMode').open) $('#dlgMode').close();
@@ -1169,9 +1418,10 @@
   function leaveOnline() {
     clearWatchdog();
     closePeer();
-    mode = 'local'; connected = false; remote = null; peerName = ''; pairRole = null; pairView = 'none'; guestWaiting = false; lastConnectError = '';
+    mode = 'local'; connected = false; remote = null; peerName = ''; pairRole = null; pairView = 'none'; guestWaiting = false; lastConnectError = ''; pendingFail = false;
     ['#offerOut', '#answerIn', '#offerIn', '#answerOut'].forEach(s => { $(s).value = ''; });
     ['#pairHostStatus', '#pairJoinStatus'].forEach(s => { $(s).textContent = ''; });
+    setRetryVisible(false);
     syncNetUI(); render();
   }
 
@@ -1234,6 +1484,9 @@
     $('#onlineChoices').hidden = connected;
     $('#btnModeLocal').textContent = (mode !== 'local' || pairView !== 'none') ? '📱 Volver a un solo teléfono' : '📱 Usar un solo teléfono';
     $('#btnShareOffer').hidden = $('#btnShareAnswer').hidden = !navigator.share;
+    // El reintento solo tiene sentido con un paso abierto y sin conexión.
+    setRetryVisible(!connected && pairView !== 'none');
+    $('#netServers').textContent = iceLabel();
     renderPill();
   }
 
@@ -1274,6 +1527,9 @@
   $('#btnJoin').addEventListener('click', () => { S.myName = $('#myName').value.trim(); save(); pairView = 'join'; lastConnectError = ''; $('#pairJoinStatus').textContent = ''; syncNetUI(); });
   $('#btnConnect').addEventListener('click', hostConnect);
   $('#btnMakeAnswer').addEventListener('click', guestAnswer);
+  $('#btnRetry').addEventListener('click', retryPair);
+  $('#btnRetry2').addEventListener('click', retryPair);
+  $('#btnTest').addEventListener('click', () => testConnection($('#testResult')));
   $('#btnCopyOffer').addEventListener('click', () => $('#offerOut').value ? copyText($('#offerOut').value, '📋 Código copiado') : toast('Aún se está generando el código'));
   $('#btnCopyAnswer').addEventListener('click', () => $('#answerOut').value ? copyText($('#answerOut').value, '📋 Código copiado') : toast('Primero genera tu respuesta'));
   $('#btnShareOffer').addEventListener('click', () => $('#offerOut').value && shareCode($('#offerOut').value));
@@ -1292,6 +1548,8 @@
   // Opciones
   $('#optSpecial').addEventListener('change', e => { S.specials = e.target.checked; save(); });
   $('#optVibrate').addEventListener('change', e => { S.vibrate = e.target.checked; save(); });
+  ['#turnOn', '#turnUrls', '#turnUser', '#turnPass'].forEach(s =>
+    $(s).addEventListener('input', readTurn));
 
   // Cerrar las ventanas con ✕ o tocando fuera de ellas
   document.querySelectorAll('dialog').forEach(d => {

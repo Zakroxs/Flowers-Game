@@ -181,6 +181,10 @@
           <button class="btn-sub" id="btnHost" type="button">➕ Crear sala</button>
           <button class="btn-sub" id="btnJoin" type="button">🔗 Unirme a una sala</button>
         </div>
+        <hr>
+        <p><b>¿Tu red sirve para conectar con otra?</b> Ábrelo con datos móviles y toca el botón. Si aparece "relay" hay TURN y debería funcionar entre ciudades; si no, tu red necesita un TURN propio (lo puedes pegar en ⚙️ Ajustes).</p>
+        <button class="btn-sub" id="btnTest" type="button">🔍 Probar conexión (sin la otra persona)</button>
+        <p class="net-status" id="testResult" style="margin-top:8px"></p>
       </div>
 
       <!-- Pasos de quien CREA la sala -->
@@ -193,7 +197,10 @@
         </div>
         <p class="step"><b>Paso 2.</b> Cuando te devuelva su código de respuesta, pégalo aquí:</p>
         <textarea class="code" id="answerIn" spellcheck="false" placeholder="Pega aquí el código de respuesta"></textarea>
-        <button class="btn-sub" id="btnConnect" type="button">🔗 Conectar</button>
+        <div class="row">
+          <button class="btn-sub" id="btnConnect" type="button">🔗 Conectar</button>
+          <button class="btn-sub" id="btnRetry" type="button" hidden>🔁 Reintentar</button>
+        </div>
         <p class="net-status" id="pairHostStatus" style="margin-top:2px"></p>
       </div>
 
@@ -201,7 +208,10 @@
       <div class="set-group" id="pairJoin" hidden>
         <p class="step"><b>Paso 1.</b> Pega el código de invitación que te enviaron:</p>
         <textarea class="code" id="offerIn" spellcheck="false" placeholder="Pega aquí el código de invitación"></textarea>
-        <button class="btn-sub" id="btnMakeAnswer" type="button">✅ Generar mi respuesta</button>
+        <div class="row">
+          <button class="btn-sub" id="btnMakeAnswer" type="button">✅ Generar mi respuesta</button>
+          <button class="btn-sub" id="btnRetry2" type="button" hidden>🔁 Reintentar</button>
+        </div>
         <p class="step"><b>Paso 2.</b> Envía este código de vuelta. Cuando lo peguen, se conectarán solos:</p>
         <textarea class="code" id="answerOut" readonly spellcheck="false" placeholder="Aquí aparecerá tu código de respuesta"></textarea>
         <div class="row">
@@ -225,6 +235,16 @@
       <div class="set-group">
         <label class="switch"><span>💌 Momento especial cada 3 preguntas</span><input type="checkbox" id="optSpecial"></label>
         <label class="switch"><span>Vibración al girar (móvil)</span><input type="checkbox" id="optVibrate"></label>
+      </div>
+      <div class="set-group">
+        <h3>🔌 Servidor TURN propio (para jugar online)</h3>
+        <p>Es lo que permite que el juego funcione cuando cada persona está en una red distinta (datos móviles en ciudades diferentes). Sin un TURN que funcione, en redes diferentes no hay conexión posible. Se guarda solo en este dispositivo.</p>
+        <p style="margin:0 0 6px">Usando: <b id="netServers">—</b></p>
+        <label class="switch"><span>Usar mi servidor TURN</span><input type="checkbox" id="turnOn"></label>
+        <textarea id="turnUrls" rows="3" spellcheck="false" placeholder="Una URL por línea, por ejemplo:&#10;turn:mi.turn.com:3478&#10;turn:mi.turn.com:3478?transport=tcp&#10;turns:mi.turn.com:5349"></textarea>
+        <input type="text" id="turnUser" maxlength="60" placeholder="Usuario" autocomplete="off">
+        <input type="text" id="turnPass" maxlength="60" placeholder="Contraseña" autocomplete="off">
+        <p style="margin:6px 0 0;font-size:.86em;opacity:.8">Cómo conseguir uno gratis: levanta <b>coturn</b> en un VPS propio (lo más fiable) o crea una cuenta en un proveedor de TURN. Después prueba con 🔍 Probar conexión: tiene que decir “relay”.</p>
       </div>
       <div class="set-group">
         <h3>Añadir una pregunta propia</h3>

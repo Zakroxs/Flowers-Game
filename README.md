@@ -14,7 +14,36 @@ Sirve para una cena, un viaje, una tarde sin plan… o para conocer mejor a esa 
 
 **Cada uno en su teléfono.** Toca el ícono 🌐. Uno crea la sala y le manda su código por WhatsApp; el otro pega el código, le devuelve el suyo y listo, quedan conectados solos. No hace falta cuenta, pero sí que los dos estén en línea al mismo tiempo.
 
-Si la conexión falla, el juego lo dice y pueden reintentarlo generando códigos nuevos.
+Si la conexión falla, el juego lo dice y queda un botón **Reintentar** que no borra lo que ya escribieron.
+
+### Si no se conectan: el TURN
+
+Esto es lo que casi siempre hace fallar el modo online, así que conviene entenderlo.
+
+Cuando los dos están en el mismo wifi, los navegadores se encuentran solos. Pero si cada uno está en una red distinta —datos móviles en ciudades diferentes— los dos están detrás de un NAT compartido y **no existe ruta directa**. En ese caso hace falta un TURN: un servidor que reenvía el tráfico entre los dos. Sin un TURN que funcione, conectar entre redes distintas es imposible.
+
+El juego trae una lista de TURN públicos, pero **ninguno es confiable**: se caen, se saturan y el que venía de fábrica (OpenRelay) dejó de aceptar sus credenciales. Por eso hay dos cosas para probar:
+
+1. **🔍 Probar conexión**, en la ventana 🌐. Ábrelo con datos móviles y tócalo: no hace falta la otra persona. Si dice "relay/TURN ✅" tu red puede conectarse con otra; si dice que no, tu red necesita un TURN y hay que pegarle uno.
+2. **⚙️ Ajustes → Servidor TURN propio**. Pegás la URL, el usuario y la contraseña, y queda con prioridad sobre todo lo demás. Se guarda en ese dispositivo.
+
+Para conseguir uno gratis, lo más fiable es levantar **coturn** en un VPS propio:
+
+```bash
+docker run -d --network=host --name coturn coturn/coturn \
+  -n --log-file=stdout --fingerprint --lt-cred-mech \
+  --realm=flowers.example.com --user=TU_USUARIO:TU_CLAVE \
+  --no-cli --no-multicast-peers --min-port=49152 --max-port=49200
+```
+
+Y en el firewall abrir `3478/udp`, `3478/tcp` y el rango `49152-49200/udp` (el rango de relay es lo que más se olvida, y sin él el TURN autentica pero nunca reenvía nada). Después en Ajustes:
+
+```
+turn:TU_DOMINIO:3478
+turn:TU_DOMINIO:3478?transport=tcp
+```
+
+Con eso el modo online funciona entre redes sin depender de nadie.
 
 ## Cómo se abre
 
@@ -57,11 +86,11 @@ En `script.js` está todo comentado por secciones numeradas, así que se puede t
 
 ## Privacidad
 
-No hay analítica, ni cookies, ni servicios de terceros. Las respuestas, los nombres y las partidas se guardan solo en el navegador, en ese dispositivo. En el modo online lo único que viaja es el estado de la partida, y va cifrado directo entre los dos teléfonos; si se cae la conexión, se borra.
+No hay analítica, ni cookies, ni servicios de terceros, salvo el TURN que se agregue (si usás uno propio, el tráfico pasa por ese servidor, aunque va cifrado de punta a punta). Las respuestas, los nombres y las partidas se guardan solo en el navegador, en ese dispositivo. En el modo online lo único que viaja es el estado de la partida, y va cifrado directo entre los dos teléfonos; si se cae la conexión, se borra.
 
 ## Limitaciones
 
-El modo online a veces tarda unos segundos o falla si alguien tiene VPN puesta, o si la red es muy restrictiva. Cuando pasa, avisa en pantalla. Usa servidores públicos y gratuitos para ayudarse a conectar, así que pueden ir lentos o saturados: si falla mucho, la opción fácil es jugar en un solo teléfono.
+El modo online depende de que haya un TURN disponible. Con los públicos puede fallar o tardar; con uno propio es confiable. También puede quedar trabado si alguien tiene VPN puesta, aunque eso avisa en pantalla. Si el modo online te marea, el de un solo teléfono funciona siempre y sin conexión.
 
 ## Licencia
 
